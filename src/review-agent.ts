@@ -31,10 +31,16 @@ export const reviewDiff = async (diff: string, model = "gpt-3.5-turbo") => {
 }
 
 const filterFile = (file: PRFile) => {
+    const extensionsToIgnore = new Set<string>(["pdf", "png", "jpg", "jpeg", "gif", "mp4", "mp3"])
     const filesToIgnore = new Set<string>(["package-lock.json"]);
     if (filesToIgnore.has(file.filename)) {
         return false;
     }
+    const extension = file.filename.split('.').pop()?.toLowerCase();
+    if (extension && extensionsToIgnore.has(extension)) {
+        return true;
+    }
+
     return true;
 }
 
