@@ -15,7 +15,7 @@ interface PRFile {
     previous_filename?: string;
 }
 
-export const reviewDiff = async (diff: string) => {
+export const reviewDiff = async (diff: string, model = "gpt-3.5-turbo") => {
     const openai = new OpenAI({
         apiKey: process.env.OPENAI_API_KEY,
     });
@@ -43,6 +43,6 @@ export const reviewChanges = async (files: PRFile[]) => {
     const patches = filteredFiles.map((file) => file.patch);
     const diff = patches.join("\n");
 
-    const feedback = await reviewDiff(diff);
+    const feedback = await reviewDiff(diff, "gpt-4");
     return feedback;
 }
