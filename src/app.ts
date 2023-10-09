@@ -3,7 +3,8 @@ import { App } from "octokit";
 import { createNodeMiddleware } from "@octokit/webhooks";
 import * as http from "http";
 import { Octokit } from "@octokit/rest";
-import { WebhookEvent } from "@octokit/webhooks-definitions/schema";
+import { WebhookEvent, WebhookEventMap } from "@octokit/webhooks-definitions/schema";
+import { reviewDiff } from "./review-agent";
 
 
 // This reads your `.env` file and adds the variables from that file to the `process.env` object in Node.js.
@@ -12,12 +13,13 @@ dotenv.config();
 // This assigns the values of your environment variables to local variables.
 
 const devEnv = process.env.NODE_ENV != "production";
+console.log(devEnv);
 
 const appId = devEnv ? process.env.DEV_APP_ID : process.env.APP_ID;
 const webhookSecret = devEnv ? process.env.DEV_WEBHOOK_SECRET : process.env.WEBHOOK_SECRET;
 
 // This reads the contents of your private key file.
-const privateKey = Buffer.from(devEnv ? process.env.DEV_PRIVATE_KEY :process.env.PRIVATE_KEY, 'base64').toString('utf-8');
+const privateKey = Buffer.from(devEnv ? process.env.DEV_PRIVATE_KEY : process.env.PRIVATE_KEY, 'base64').toString('utf-8');
 
 // This creates a new instance of the Octokit App class.
 const app = new App({
@@ -31,30 +33,71 @@ const app = new App({
 // This defines the message that your app will post to pull requests.
 const messageForNewPRs = "Thanks for opening a new PR! Please follow our contributing guidelines to make your PR easier to review.";
 
+const getChangesPerFile = async (payload: WebhookEventMap["pull_request"]) => {
+  try {
+    const { data: files } = await (await app.getInstallationOctokit(payload.installation.id)).rest.pulls.listFiles({
+      owner: payload.repository.owner.login,
+      repo: payload.repository.name,
+      pull_number: payload.pull_request.number
+    });
+    return files;
+  } catch (exc) {
+    console.log("exc");
+    return [];
+  }
+}
+
 // This adds an event handler that your code will call later. When this event handler is called, it will log the event to the console. Then, it will use GitHub's REST API to add a comment to the pull request that triggered the event.
-//@ts-ignore
-async function handlePullRequestOpened({octokit, payload}) {
+async function handlePullRequestOpened({octokit, payload}: {octokit: Octokit, payload: WebhookEventMap["pull_request"]}) {
   console.log(`Received a pull request event for #${payload.pull_request.number}`);
 
   try {
+    const { data: diff } = await (await app.getInstallationOctokit(payload.installation.id)).rest.pulls.get({
+      owner: payload.repository.owner.login,
+      repo: payload.repository.name,
+      pull_number: payload.pull_request.number,
+      mediaType: {
+        format: 'diff'
+      }
+    });
+
+    // Now you can do whatever you want with the diff content
+    console.log(diff);
+    //@ts-ignore
+    const aiReview = await reviewDiff(diff);
     await octokit.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", {
       owner: payload.repository.owner.login,
       repo: payload.repository.name,
       issue_number: payload.pull_request.number,
-      body: messageForNewPRs,
+      body: aiReview,
       headers: {
         "x-github-api-version": "2022-11-28",
       },
     });
-  } catch (error) {
-    if (error.response) {
-      console.error(`Error! Status: ${error.response.status}. Message: ${error.response.data.message}`)
-    }
-    console.error(error)
+  } catch (exc) {
+    console.log(exc);
   }
+
+  // try {
+  //   await octokit.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", {
+  //     owner: payload.repository.owner.login,
+  //     repo: payload.repository.name,
+  //     issue_number: payload.pull_request.number,
+  //     body: messageForNewPRs,
+  //     headers: {
+  //       "x-github-api-version": "2022-11-28",
+  //     },
+  //   });
+  // } catch (error) {
+  //   if (error.response) {
+  //     console.error(`Error! Status: ${error.response.status}. Message: ${error.response.data.message}`)
+  //   }
+  //   console.error(error)
+  // }
 };
 
 // This sets up a webhook event listener. When your app receives a webhook event from GitHub with a `X-GitHub-Event` header value of `pull_request` and an `action` payload value of `opened`, it calls the `handlePullRequestOpened` event handler that is defined above.
+//@ts-ignore
 app.webhooks.on("pull_request.opened", handlePullRequestOpened);
 
 // This logs any errors that occur.
