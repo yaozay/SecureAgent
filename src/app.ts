@@ -10,11 +10,14 @@ import { WebhookEvent } from "@octokit/webhooks-definitions/schema";
 dotenv.config();
 
 // This assigns the values of your environment variables to local variables.
-const appId = process.env.APP_ID;
-const webhookSecret = process.env.WEBHOOK_SECRET;
+
+const devEnv = process.env.NODE_ENV != "production";
+
+const appId = devEnv ? process.env.DEV_APP_ID : process.env.APP_ID;
+const webhookSecret = devEnv ? process.env.DEV_WEBHOOK_SECRET : process.env.WEBHOOK_SECRET;
 
 // This reads the contents of your private key file.
-const privateKey = Buffer.from(process.env.PRIVATE_KEY, 'base64').toString('utf-8');
+const privateKey = Buffer.from(devEnv ? process.env.DEV_PRIVATE_KEY :process.env.PRIVATE_KEY, 'base64').toString('utf-8');
 
 // This creates a new instance of the Octokit App class.
 const app = new App({
