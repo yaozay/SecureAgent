@@ -4,7 +4,7 @@ import { createNodeMiddleware } from "@octokit/webhooks";
 import * as http from "http";
 import { Octokit } from "@octokit/rest";
 import { WebhookEvent, WebhookEventMap } from "@octokit/webhooks-definitions/schema";
-import { reviewDiff } from "./review-agent";
+import { reviewChanges, reviewDiff } from "./review-agent";
 
 
 // This reads your `.env` file and adds the variables from that file to the `process.env` object in Node.js.
@@ -52,19 +52,20 @@ async function handlePullRequestOpened({octokit, payload}: {octokit: Octokit, pa
   console.log(`Received a pull request event for #${payload.pull_request.number}`);
 
   try {
-    const { data: diff } = await (await app.getInstallationOctokit(payload.installation.id)).rest.pulls.get({
-      owner: payload.repository.owner.login,
-      repo: payload.repository.name,
-      pull_number: payload.pull_request.number,
-      mediaType: {
-        format: 'diff'
-      }
-    });
-
+    // const { data: diff } = await (await app.getInstallationOctokit(payload.installation.id)).rest.pulls.get({
+    //   owner: payload.repository.owner.login,
+    //   repo: payload.repository.name,
+    //   pull_number: payload.pull_request.number,
+    //   mediaType: {
+    //     format: 'diff'
+    //   }
+    // });
+    const files = await getChangesPerFile(payload);
+    const aiReview = await reviewChanges(files)
     // Now you can do whatever you want with the diff content
-    console.log(diff);
+    // console.log(diff);
     //@ts-ignore
-    const aiReview = await reviewDiff(diff);
+    // const aiReview = await reviewDiff(diff);
     await octokit.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", {
       owner: payload.repository.owner.login,
       repo: payload.repository.name,
