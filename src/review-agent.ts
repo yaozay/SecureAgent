@@ -24,7 +24,7 @@ export const reviewDiff = async (diff: string, model = "gpt-3.5-turbo") => {
     const chatCompletion = await openai.chat.completions.create({
         //@ts-ignore
         messages: convo,
-        model: 'gpt-3.5-turbo',
+        model: model,
     });
     console.log("done")
     return chatCompletion.choices[0].message.content;
