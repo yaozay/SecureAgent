@@ -38,7 +38,7 @@ const filterFile = (file: PRFile) => {
     }
     const extension = file.filename.split('.').pop()?.toLowerCase();
     if (extension && extensionsToIgnore.has(extension)) {
-        return true;
+        return false;
     }
 
     return true;
