@@ -1,22 +1,12 @@
 import OpenAI from 'openai';
 import { getReviewPrompt, getTokenLength, withinModelTokenLimit } from './prompts';
+import { LLModel, PRFile } from './constants';
 
-interface PRFile {
-    sha: string;
-    filename: string;
-    status: "added" | "removed" | "renamed" | "changed" | "modified" | "copied" | "unchanged";
-    additions: number;
-    deletions: number;
-    changes: number;
-    blob_url: string;
-    raw_url: string;
-    contents_url: string;
-    patch?: string;
-    previous_filename?: string;
-    patchTokenLength?: number;
+const buildPatchPrompt = (file: PRFile) => {
+    return `## ${file.filename}\n\n${file.patch}`;
 }
 
-export const reviewDiff = async (diff: string, model = "gpt-3.5-turbo") => {
+export const reviewDiff = async (diff: string, model: LLModel = "gpt-3.5-turbo") => {
     const openai = new OpenAI({
         apiKey: process.env.OPENAI_API_KEY,
     });
@@ -45,7 +35,7 @@ const filterFile = (file: PRFile) => {
     return true;
 }
 
-export const reviewChanges = async (files: PRFile[], model = "gpt-3.5-turbo") => {
+export const reviewChanges = async (files: PRFile[], model: LLModel = "gpt-3.5-turbo") => {
     const filteredFiles = files.filter((file) => filterFile(file));
     filteredFiles.map((file) => {
         file.patchTokenLength = getTokenLength(file.patch);
@@ -57,9 +47,9 @@ export const reviewChanges = async (files: PRFile[], model = "gpt-3.5-turbo") =>
 
     
 
-    const patches = filteredFiles.map((file) => file.patch);
+    const patches = filteredFiles.map((file) => buildPatchPrompt(file));
     const diff = patches.join("\n");
 
-    const feedback = await reviewDiff(diff, "gpt-4");
+    const feedback = await reviewDiff(diff, model);
     return feedback;
 }
