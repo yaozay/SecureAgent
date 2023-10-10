@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { getReviewPrompt } from './prompts';
+import { getReviewPrompt, getTokenLength, withinModelTokenLimit } from './prompts';
 
 interface PRFile {
     sha: string;
@@ -13,14 +13,15 @@ interface PRFile {
     contents_url: string;
     patch?: string;
     previous_filename?: string;
+    patchTokenLength?: number;
 }
 
 export const reviewDiff = async (diff: string, model = "gpt-3.5-turbo") => {
     const openai = new OpenAI({
         apiKey: process.env.OPENAI_API_KEY,
     });
-    console.log(diff);
     const convo = getReviewPrompt(diff);
+    console.log(convo);
     const chatCompletion = await openai.chat.completions.create({
         //@ts-ignore
         messages: convo,
@@ -44,8 +45,18 @@ const filterFile = (file: PRFile) => {
     return true;
 }
 
-export const reviewChanges = async (files: PRFile[]) => {
+export const reviewChanges = async (files: PRFile[], model = "gpt-3.5-turbo") => {
     const filteredFiles = files.filter((file) => filterFile(file));
+    filteredFiles.map((file) => {
+        file.patchTokenLength = getTokenLength(file.patch);
+    });
+    // further subdivide if necessary, maybe group files by common extension?
+    const patchesWithinModelLimit = filteredFiles.filter((file) => withinModelTokenLimit(model, file.patch));
+    // these single file patches are larger than the full model context
+    const patchesOutsideModelLimit = filteredFiles.filter((file) => !withinModelTokenLimit(model, file.patch));
+
+    
+
     const patches = filteredFiles.map((file) => file.patch);
     const diff = patches.join("\n");
 

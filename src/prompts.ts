@@ -1,3 +1,10 @@
+import { encode } from 'gpt-tokenizer';
+
+const ModelsToTokenLimits = new Map<string, number>([
+  ["gpt-3.5-turbo", 4096],
+  ["gpt-4", 8191]
+]);
+
 const REVIEW_DIFF_PROMPT = `
 You are PR-Reviewer, a language model designed to review git pull requests.
 Your task is to provide constructive and concise feedback for the PR, and also provide meaningful code suggestions.
@@ -41,4 +48,16 @@ export const getReviewPrompt = (diff: string) => {
     {role: 'user', content: diff}
   ]
   return convo;
+}
+
+export const getTokenLength = (blob: string) => {
+  return encode(blob).length;
+}
+
+export const withinModelTokenLimit = (model: string, blob: string) => {
+  const tokenLimit = ModelsToTokenLimits.get(model);
+  if (tokenLimit == null) {
+    throw `Model: ${model} not found.`
+  };
+  return getTokenLength(blob) < tokenLimit;
 }
