@@ -61,7 +61,7 @@ async function handlePullRequestOpened({octokit, payload}: {octokit: Octokit, pa
     //   }
     // });
     const files = await getChangesPerFile(payload);
-    const aiReview = await reviewChanges(files)
+    const aiReview = await reviewChanges(files, "gpt-4")
     // Now you can do whatever you want with the diff content
     // console.log(diff);
     //@ts-ignore
