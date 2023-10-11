@@ -92,16 +92,15 @@ const processWithinLimitFiles = (files: PRFile[], model: LLModel) => {
     return processGroups;
 }
 
-const stripRemovedLines = (file: PRFile) => {
+const stripRemovedLines = (originalFile: PRFile) => {
     // remove lines starting with a '-'
-    const originalPatch = file.patch;
+    const originalPatch = originalFile.patch;
     const strippedPatch = originalPatch.split('\n').filter(line => !line.startsWith('+')).join('\n');
-    file.patch = strippedPatch;
-    return file;
+    return { ...originalFile, patch: strippedPatch };
 }
 
 const processOutsideLimitFiles = (files: PRFile[], model: LLModel) => {
-    files.forEach((file) => stripRemovedLines(file));
+    files = files.map((file) => stripRemovedLines(file));
     const convoWithinModelLimit = isConversationWithinLimit(constructPrompt(files), model);
     const processGroups: PRFile[][] = [];
     if (convoWithinModelLimit) {
