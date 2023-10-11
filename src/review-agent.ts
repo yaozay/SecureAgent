@@ -95,7 +95,7 @@ const processWithinLimitFiles = (files: PRFile[], model: LLModel) => {
 const stripRemovedLines = (originalFile: PRFile) => {
     // remove lines starting with a '-'
     const originalPatch = originalFile.patch;
-    const strippedPatch = originalPatch.split('\n').filter(line => !line.startsWith('+')).join('\n');
+    const strippedPatch = originalPatch.split('\n').filter(line => !line.startsWith('-')).join('\n');
     return { ...originalFile, patch: strippedPatch };
 }
 
