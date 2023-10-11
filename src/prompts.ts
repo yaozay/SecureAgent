@@ -1,11 +1,12 @@
-import { encode } from 'gpt-tokenizer';
+import { encode, isWithinTokenLimit, encodeChat } from 'gpt-tokenizer';
+import { LLModel, PRFile } from './constants';
 
 const ModelsToTokenLimits = new Map<string, number>([
   ["gpt-3.5-turbo", 4096],
   ["gpt-4", 8191]
 ]);
 
-const REVIEW_DIFF_PROMPT = `
+export const REVIEW_DIFF_PROMPT = `
 You are PR-Reviewer, a language model designed to review git pull requests.
 Your task is to provide constructive and concise feedback for the PR, and also provide meaningful code suggestions.
 
@@ -42,6 +43,10 @@ Make sure the provided code suggestions are in the same programming langauge.
 Don't repeat the prompt in the answer, and avoid outputting the 'type' and 'description' fields.
 `;
 
+export const buildPatchPrompt = (file: PRFile) => {
+  return `## ${file.filename}\n\n${file.patch}`;
+}
+
 export const getReviewPrompt = (diff: string) => {
   const convo = [
     {role: 'system', content: REVIEW_DIFF_PROMPT},
@@ -50,14 +55,30 @@ export const getReviewPrompt = (diff: string) => {
   return convo;
 }
 
+export const constructPrompt = (files: PRFile[]) => {
+  const patches = files.map((file) => buildPatchPrompt(file));
+  const diff = patches.join("\n");
+  const convo = getReviewPrompt(diff);
+  return convo;
+}
+
 export const getTokenLength = (blob: string) => {
   return encode(blob).length;
 }
 
-export const withinModelTokenLimit = (model: string, blob: string) => {
+export const withinModelTokenLimit = (model: LLModel, blob: string) => {
   const tokenLimit = ModelsToTokenLimits.get(model);
   if (tokenLimit == null) {
     throw `Model: ${model} not found.`
   };
   return getTokenLength(blob) < tokenLimit;
+}
+
+export const getModelTokenLimit = (model: LLModel) => {
+  return ModelsToTokenLimits.get(model);
+}
+
+export const isConversationWithinLimit = (convo: any[], model: LLModel) => {
+  const convoTokens = encodeChat(convo, model).length
+  return convoTokens < ModelsToTokenLimits.get(model);
 }

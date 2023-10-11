@@ -1,10 +1,7 @@
 import OpenAI from 'openai';
-import { getReviewPrompt, getTokenLength, withinModelTokenLimit } from './prompts';
+import { buildPatchPrompt, constructPrompt, getModelTokenLimit, getReviewPrompt, getTokenLength, isConversationWithinLimit, withinModelTokenLimit } from './prompts';
 import { LLModel, PRFile } from './constants';
 
-const buildPatchPrompt = (file: PRFile) => {
-    return `## ${file.filename}\n\n${file.patch}`;
-}
 
 export const reviewDiff = async (diff: string, model: LLModel = "gpt-3.5-turbo") => {
     const openai = new OpenAI({
@@ -21,6 +18,13 @@ export const reviewDiff = async (diff: string, model: LLModel = "gpt-3.5-turbo")
     return chatCompletion.choices[0].message.content;
 }
 
+export const reviewFiles = async (files: PRFile[], model: LLModel) => {
+    const patches = files.map((file) => buildPatchPrompt(file));
+    const diff = patches.join("\n");
+    const feedback = await reviewDiff(diff, model);
+    return feedback
+}
+
 const filterFile = (file: PRFile) => {
     const extensionsToIgnore = new Set<string>(["pdf", "png", "jpg", "jpeg", "gif", "mp4", "mp3"])
     const filesToIgnore = new Set<string>(["package-lock.json"]);
@@ -35,21 +39,96 @@ const filterFile = (file: PRFile) => {
     return true;
 }
 
+const groupFilesByExtension = (files: PRFile[]): Map<string, PRFile[]> => {
+    const filesByExtension: Map<string, PRFile[]> = new Map();
+
+    files.forEach((file) => {
+        const extension = file.filename.split('.').pop()?.toLowerCase();
+        if (extension) {
+            if (!filesByExtension.has(extension)) {
+                filesByExtension.set(extension, []);
+            }
+            filesByExtension.get(extension)?.push(file);
+        }
+    });
+
+    return filesByExtension;
+}
+
+
+// all of the files here can be processed with the prompt at minimum
+const processWithinLimitFiles = (files: PRFile[], model: LLModel) => {
+    const processGroups: PRFile[][] = [];
+    const convoWithinModelLimit = isConversationWithinLimit(constructPrompt(files), model);
+
+    console.log(`Within model token limits: ${convoWithinModelLimit}`);
+    if (!convoWithinModelLimit) {
+        const grouped = groupFilesByExtension(files);
+        for (const [extension, filesForExt] of grouped.entries()) {
+            const extGroupWithinModelLimit = isConversationWithinLimit(constructPrompt(filesForExt), model);
+            if (extGroupWithinModelLimit) {
+                processGroups.push(filesForExt);
+            } else { // extension group exceeds model limit
+                console.log('Processing files per extension that exceed model limit ...');
+                let currentGroup: PRFile[] = [];
+                filesForExt.sort((a, b) => a.patchTokenLength - b.patchTokenLength);
+                filesForExt.forEach(file => {
+                    const isPotentialGroupWithinLimit = isConversationWithinLimit(constructPrompt([...currentGroup, file]), model);
+                    if (isPotentialGroupWithinLimit) {
+                        currentGroup.push(file);
+                    } else {
+                        processGroups.push(currentGroup);
+                        currentGroup = [file];
+                    }
+                });
+                if (currentGroup.length > 0) {
+                    processGroups.push(currentGroup);
+                }
+            }
+        }
+    } else {
+        processGroups.push(files);
+    }
+    return processGroups;
+}
+
+const processOutsideLimitFiles = (files: PRFile[], model: LLModel) => {
+    // remove lines starting with a '-'?
+    throw "Unimplemented";
+}
+
+
 export const reviewChanges = async (files: PRFile[], model: LLModel = "gpt-3.5-turbo") => {
     const filteredFiles = files.filter((file) => filterFile(file));
     filteredFiles.map((file) => {
-        file.patchTokenLength = getTokenLength(file.patch);
+        file.patchTokenLength = getTokenLength(buildPatchPrompt(file));
     });
     // further subdivide if necessary, maybe group files by common extension?
-    const patchesWithinModelLimit = filteredFiles.filter((file) => withinModelTokenLimit(model, file.patch));
+    const patchesWithinModelLimit: PRFile[] = [];
     // these single file patches are larger than the full model context
-    const patchesOutsideModelLimit = filteredFiles.filter((file) => !withinModelTokenLimit(model, file.patch));
-
+    const patchesOutsideModelLimit: PRFile[] = [];
     
+    filteredFiles.forEach((file) => {
+        const patchWithPromptWithinLimit = isConversationWithinLimit(constructPrompt([file]), model);
+        if (patchWithPromptWithinLimit) {
+            patchesWithinModelLimit.push(file);
+        } else {
+            patchesOutsideModelLimit.push(file);
+        }
+    });
 
-    const patches = filteredFiles.map((file) => buildPatchPrompt(file));
-    const diff = patches.join("\n");
+    console.log(`files within limits: ${patchesWithinModelLimit.length}`);
+    const withinLimitsPatchGroups = processWithinLimitFiles(patchesWithinModelLimit, model);
+    // const exceedingLimitsPatchGroups = processOutsideLimitFiles(patchesOutsideModelLimit, model);
+    console.log(`${withinLimitsPatchGroups.length} within limits groups.`)
+    console.log(`${patchesOutsideModelLimit.length} files outside limit, skipping them.`)
 
-    const feedback = await reviewDiff(diff, model);
-    return feedback;
+
+    const feedbacks = await Promise.all(
+        withinLimitsPatchGroups.map((patchGroup) => {
+            return reviewFiles(patchGroup, model);
+        })
+    );
+    const review = feedbacks.join("\n");
+    return review;
 }
