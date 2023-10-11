@@ -1,11 +1,7 @@
 import OpenAI from 'openai';
-import { REVIEW_DIFF_PROMPT, getModelTokenLimit, getReviewPrompt, getTokenLength, withinModelTokenLimit } from './prompts';
+import { buildPatchPrompt, constructPrompt, getModelTokenLimit, getReviewPrompt, getTokenLength, isConversationWithinLimit, withinModelTokenLimit } from './prompts';
 import { LLModel, PRFile } from './constants';
-import { encode } from 'gpt-tokenizer';
 
-const buildPatchPrompt = (file: PRFile) => {
-    return `## ${file.filename}\n\n${file.patch}`;
-}
 
 export const reviewDiff = async (diff: string, model: LLModel = "gpt-3.5-turbo") => {
     const openai = new OpenAI({
@@ -60,22 +56,34 @@ const groupFilesByExtension = (files: PRFile[]): Map<string, PRFile[]> => {
 }
 
 
-// todo: include prompt tokens
+// all of the files here can be processed with the prompt at minimum
 const processWithinLimitFiles = (files: PRFile[], model: LLModel) => {
     const processGroups: PRFile[][] = [];
-    const fullTokenCount = files.reduce((total, file) => total + (file.patchTokenLength || 0), 0) + encode(REVIEW_DIFF_PROMPT).length;
+    const convoWithinModelLimit = isConversationWithinLimit(constructPrompt(files), model);
 
-    const tokenLimit = getModelTokenLimit(model);
-    console.log(`model limit: ${tokenLimit}\ntoken count: ${fullTokenCount}`);
-    if (fullTokenCount > tokenLimit) {
+    console.log(`Within model token limits: ${convoWithinModelLimit}`);
+    if (!convoWithinModelLimit) {
         const grouped = groupFilesByExtension(files);
         for (const [extension, filesForExt] of grouped.entries()) {
-            const extTokenCount = filesForExt.reduce((total, file) => total + (file.patchTokenLength || 0), 0) + encode(REVIEW_DIFF_PROMPT).length;
-            if (extTokenCount < tokenLimit) {
+            const extGroupWithinModelLimit = isConversationWithinLimit(constructPrompt(filesForExt), model);
+            if (extGroupWithinModelLimit) {
                 processGroups.push(filesForExt);
-            } else {
-                // more processing
-                console.log('Split by extension still exceeds model limit, need more token optimization.');
+            } else { // extension group exceeds model limit
+                console.log('Processing files per extension that exceed model limit ...');
+                let currentGroup: PRFile[] = [];
+                filesForExt.sort((a, b) => a.patchTokenLength - b.patchTokenLength);
+                filesForExt.forEach(file => {
+                    const isPotentialGroupWithinLimit = isConversationWithinLimit(constructPrompt([...currentGroup, file]), model);
+                    if (isPotentialGroupWithinLimit) {
+                        currentGroup.push(file);
+                    } else {
+                        processGroups.push(currentGroup);
+                        currentGroup = [file];
+                    }
+                });
+                if (currentGroup.length > 0) {
+                    processGroups.push(currentGroup);
+                }
             }
         }
     } else {
@@ -101,7 +109,8 @@ export const reviewChanges = async (files: PRFile[], model: LLModel = "gpt-3.5-t
     const patchesOutsideModelLimit: PRFile[] = [];
     
     filteredFiles.forEach((file) => {
-        if (withinModelTokenLimit(model, file.patch)) {
+        const patchWithPromptWithinLimit = isConversationWithinLimit(constructPrompt([file]), model);
+        if (patchWithPromptWithinLimit) {
             patchesWithinModelLimit.push(file);
         } else {
             patchesOutsideModelLimit.push(file);
@@ -110,6 +119,7 @@ export const reviewChanges = async (files: PRFile[], model: LLModel = "gpt-3.5-t
 
     console.log(`files within limits: ${patchesWithinModelLimit.length}`);
     const withinLimitsPatchGroups = processWithinLimitFiles(patchesWithinModelLimit, model);
+    // const exceedingLimitsPatchGroups = processOutsideLimitFiles(patchesOutsideModelLimit, model);
     console.log(`${withinLimitsPatchGroups.length} within limits groups.`)
     console.log(`${patchesOutsideModelLimit.length} files outside limit, skipping them.`)
 

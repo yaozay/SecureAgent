@@ -1,5 +1,5 @@
-import { encode } from 'gpt-tokenizer';
-import { LLModel } from './constants';
+import { encode, isWithinTokenLimit, encodeChat } from 'gpt-tokenizer';
+import { LLModel, PRFile } from './constants';
 
 const ModelsToTokenLimits = new Map<string, number>([
   ["gpt-3.5-turbo", 4096],
@@ -43,11 +43,22 @@ Make sure the provided code suggestions are in the same programming langauge.
 Don't repeat the prompt in the answer, and avoid outputting the 'type' and 'description' fields.
 `;
 
+export const buildPatchPrompt = (file: PRFile) => {
+  return `## ${file.filename}\n\n${file.patch}`;
+}
+
 export const getReviewPrompt = (diff: string) => {
   const convo = [
     {role: 'system', content: REVIEW_DIFF_PROMPT},
     {role: 'user', content: diff}
   ]
+  return convo;
+}
+
+export const constructPrompt = (files: PRFile[]) => {
+  const patches = files.map((file) => buildPatchPrompt(file));
+  const diff = patches.join("\n");
+  const convo = getReviewPrompt(diff);
   return convo;
 }
 
@@ -65,4 +76,9 @@ export const withinModelTokenLimit = (model: LLModel, blob: string) => {
 
 export const getModelTokenLimit = (model: LLModel) => {
   return ModelsToTokenLimits.get(model);
+}
+
+export const isConversationWithinLimit = (convo: any[], model: LLModel) => {
+  const convoTokens = encodeChat(convo, model).length
+  return convoTokens < ModelsToTokenLimits.get(model);
 }
