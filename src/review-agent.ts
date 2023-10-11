@@ -92,9 +92,41 @@ const processWithinLimitFiles = (files: PRFile[], model: LLModel) => {
     return processGroups;
 }
 
+const stripRemovedLines = (file: PRFile) => {
+    // remove lines starting with a '-'
+    const originalPatch = file.patch;
+    const strippedPatch = originalPatch.split('\n').filter(line => !line.startsWith('+')).join('\n');
+    file.patch = strippedPatch;
+    return file;
+}
+
 const processOutsideLimitFiles = (files: PRFile[], model: LLModel) => {
-    // remove lines starting with a '-'?
-    throw "Unimplemented";
+    files.forEach((file) => stripRemovedLines(file));
+    const convoWithinModelLimit = isConversationWithinLimit(constructPrompt(files), model);
+    const processGroups: PRFile[][] = [];
+    if (convoWithinModelLimit) {
+        processGroups.push(files);
+    } else {
+        const exceedingLimits: PRFile[] = [];
+        const withinLimits: PRFile[] = [];
+        files.forEach((file) => {
+            const isFileConvoWithinLimits = isConversationWithinLimit((constructPrompt([file])), model);
+            if (isFileConvoWithinLimits) {
+                withinLimits.push(file);
+            } else {
+                exceedingLimits.push(file);
+            }
+        });
+        const withinLimitsGroup = processWithinLimitFiles(withinLimits, model);
+        withinLimitsGroup.forEach((group) => {
+            processGroups.push(group);
+        });
+        if (exceedingLimits.length > 0) {
+            console.log("TODO: Need to further chunk large file changes.");
+            throw "Unimplemented"
+        }
+    }
+    return processGroups;
 }
 
 
