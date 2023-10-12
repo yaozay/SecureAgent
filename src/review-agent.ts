@@ -139,7 +139,7 @@ const processOutsideLimitFiles = (files: PRFile[], model: LLModel) => {
         });
         if (exceedingLimits.length > 0) {
             console.log("TODO: Need to further chunk large file changes.");
-            throw "Unimplemented"
+            // throw "Unimplemented"
         }
     }
     return processGroups;
@@ -167,13 +167,14 @@ export const reviewChanges = async (files: PRFile[], model: LLModel = "gpt-3.5-t
 
     console.log(`files within limits: ${patchesWithinModelLimit.length}`);
     const withinLimitsPatchGroups = processWithinLimitFiles(patchesWithinModelLimit, model);
-    // const exceedingLimitsPatchGroups = processOutsideLimitFiles(patchesOutsideModelLimit, model);
+    const exceedingLimitsPatchGroups = processOutsideLimitFiles(patchesOutsideModelLimit, model);
     console.log(`${withinLimitsPatchGroups.length} within limits groups.`)
     console.log(`${patchesOutsideModelLimit.length} files outside limit, skipping them.`)
 
+    const groups = [...withinLimitsPatchGroups, ...exceedingLimitsPatchGroups];
 
     const feedbacks = await Promise.all(
-        withinLimitsPatchGroups.map((patchGroup) => {
+        groups.map((patchGroup) => {
             return reviewFiles(patchGroup, model);
         })
     );
