@@ -5,6 +5,7 @@
     "serve": "tsc && node dist/app.js"
   },
   "dependencies": {
+    "@axiomhq/js": "^1.0.0-rc.1",
     "@octokit/rest": "^20.0.2",
     "@octokit/webhooks-definitions": "^3.67.3",
     "@types/node": "^20.8.3",

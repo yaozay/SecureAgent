@@ -1,14 +1,14 @@
 import * as dotenv from "dotenv";
+dotenv.config();
 import { App } from "octokit";
 import { createNodeMiddleware } from "@octokit/webhooks";
 import * as http from "http";
 import { Octokit } from "@octokit/rest";
 import { WebhookEvent, WebhookEventMap } from "@octokit/webhooks-definitions/schema";
-import { reviewChanges, reviewDiff } from "./review-agent";
+import { logPRInfo, reviewChanges, reviewDiff } from "./review-agent";
 
 
 // This reads your `.env` file and adds the variables from that file to the `process.env` object in Node.js.
-dotenv.config();
 
 // This assigns the values of your environment variables to local variables.
 
@@ -35,6 +35,7 @@ const messageForNewPRs = "Thanks for opening a new PR! Please follow our contrib
 
 const getChangesPerFile = async (payload: WebhookEventMap["pull_request"]) => {
   try {
+    logPRInfo(payload);
     const { data: files } = await (await app.getInstallationOctokit(payload.installation.id)).rest.pulls.listFiles({
       owner: payload.repository.owner.login,
       repo: payload.repository.name,

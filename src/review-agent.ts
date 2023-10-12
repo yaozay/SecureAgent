@@ -1,7 +1,24 @@
 import OpenAI from 'openai';
 import { buildPatchPrompt, constructPrompt, getModelTokenLimit, getReviewPrompt, getTokenLength, isConversationWithinLimit, withinModelTokenLimit } from './prompts';
 import { LLModel, PRFile } from './constants';
+import { PullRequestEvent } from '@octokit/webhooks-definitions/schema';
+import { axiom } from './logger';
 
+interface PRLogEvent {
+    id: number;
+    fullName: string;
+    url: string;
+};
+
+export const logPRInfo = (pullRequest: PullRequestEvent) => {
+    const logEvent: PRLogEvent = {
+        id: pullRequest.repository.id,
+        fullName: pullRequest.repository.full_name,
+        url: pullRequest.repository.html_url,
+    }
+    axiom.ingest('review-agent', [logEvent]);
+    return logEvent;
+}
 
 export const reviewDiff = async (diff: string, model: LLModel = "gpt-3.5-turbo") => {
     const openai = new OpenAI({
@@ -27,7 +44,7 @@ export const reviewFiles = async (files: PRFile[], model: LLModel) => {
 
 const filterFile = (file: PRFile) => {
     const extensionsToIgnore = new Set<string>(["pdf", "png", "jpg", "jpeg", "gif", "mp4", "mp3"])
-    const filesToIgnore = new Set<string>(["package-lock.json"]);
+    const filesToIgnore = new Set<string>(["package-lock.json", "yarn.lock"]);
     if (filesToIgnore.has(file.filename)) {
         return false;
     }
@@ -161,5 +178,6 @@ export const reviewChanges = async (files: PRFile[], model: LLModel = "gpt-3.5-t
         })
     );
     const review = feedbacks.join("\n");
+    // console.log(review);
     return review;
 }
