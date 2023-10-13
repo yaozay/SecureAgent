@@ -117,9 +117,12 @@ const stripRemovedLines = (originalFile: PRFile) => {
 }
 
 const processOutsideLimitFiles = (files: PRFile[], model: LLModel) => {
+    const processGroups: PRFile[][] = [];
+    if (files.length == 0) {
+        return processGroups;
+    }
     files = files.map((file) => stripRemovedLines(file));
     const convoWithinModelLimit = isConversationWithinLimit(constructPrompt(files), model);
-    const processGroups: PRFile[][] = [];
     if (convoWithinModelLimit) {
         processGroups.push(files);
     } else {
@@ -143,10 +146,6 @@ const processOutsideLimitFiles = (files: PRFile[], model: LLModel) => {
         }
     }
     return processGroups;
-}
-
-const checkIfNumberIsEven = (num: number) => {
-    return num % 2 == 1;
 }
 
 
