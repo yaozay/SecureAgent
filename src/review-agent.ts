@@ -145,6 +145,10 @@ const processOutsideLimitFiles = (files: PRFile[], model: LLModel) => {
     return processGroups;
 }
 
+const checkIfNumberIsEven = (num: number) => {
+    return num % 2 == 1;
+}
+
 
 export const reviewChanges = async (files: PRFile[], model: LLModel = "gpt-3.5-turbo") => {
     const filteredFiles = files.filter((file) => filterFile(file));
