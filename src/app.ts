@@ -35,7 +35,6 @@ const messageForNewPRs = "Thanks for opening a new PR! Please follow our contrib
 
 const getChangesPerFile = async (payload: WebhookEventMap["pull_request"]) => {
   try {
-    logPRInfo(payload);
     const { data: files } = await (await app.getInstallationOctokit(payload.installation.id)).rest.pulls.listFiles({
       owner: payload.repository.owner.login,
       repo: payload.repository.name,
@@ -53,14 +52,7 @@ async function handlePullRequestOpened({octokit, payload}: {octokit: Octokit, pa
   console.log(`Received a pull request event for #${payload.pull_request.number}`);
 
   try {
-    // const { data: diff } = await (await app.getInstallationOctokit(payload.installation.id)).rest.pulls.get({
-    //   owner: payload.repository.owner.login,
-    //   repo: payload.repository.name,
-    //   pull_number: payload.pull_request.number,
-    //   mediaType: {
-    //     format: 'diff'
-    //   }
-    // });
+    logPRInfo(payload);
     const files = await getChangesPerFile(payload);
     const aiReview = await reviewChanges(files, "gpt-4")
     // Now you can do whatever you want with the diff content
