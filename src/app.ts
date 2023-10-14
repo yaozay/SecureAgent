@@ -5,7 +5,9 @@ import { createNodeMiddleware } from "@octokit/webhooks";
 import * as http from "http";
 import { Octokit } from "@octokit/rest";
 import { WebhookEvent, WebhookEventMap } from "@octokit/webhooks-definitions/schema";
-import { logPRInfo, reviewChanges, reviewDiff } from "./review-agent";
+import { generateCodeSuggestions, logPRInfo, processPullRequest, reviewChanges, reviewDiff } from "./review-agent";
+import { applyReview } from "./reviews";
+import { Review } from "./constants";
 
 
 // This reads your `.env` file and adds the variables from that file to the `process.env` object in Node.js.
@@ -54,40 +56,12 @@ async function handlePullRequestOpened({octokit, payload}: {octokit: Octokit, pa
   try {
     logPRInfo(payload);
     const files = await getChangesPerFile(payload);
-    const aiReview = await reviewChanges(files, "gpt-4")
-    // Now you can do whatever you want with the diff content
-    // console.log(diff);
-    //@ts-ignore
-    // const aiReview = await reviewDiff(diff);
-    await octokit.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", {
-      owner: payload.repository.owner.login,
-      repo: payload.repository.name,
-      issue_number: payload.pull_request.number,
-      body: aiReview,
-      headers: {
-        "x-github-api-version": "2022-11-28",
-      },
-    });
+    const review: Review = await processPullRequest(files, "gpt-4");
+    await applyReview({octokit, payload, review})
+    console.log("Review Submitted");
   } catch (exc) {
     console.log(exc);
   }
-
-  // try {
-  //   await octokit.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", {
-  //     owner: payload.repository.owner.login,
-  //     repo: payload.repository.name,
-  //     issue_number: payload.pull_request.number,
-  //     body: messageForNewPRs,
-  //     headers: {
-  //       "x-github-api-version": "2022-11-28",
-  //     },
-  //   });
-  // } catch (error) {
-  //   if (error.response) {
-  //     console.error(`Error! Status: ${error.response.status}. Message: ${error.response.data.message}`)
-  //   }
-  //   console.error(error)
-  // }
 };
 
 // This sets up a webhook event listener. When your app receives a webhook event from GitHub with a `X-GitHub-Event` header value of `pull_request` and an `action` payload value of `opened`, it calls the `handlePullRequestOpened` event handler that is defined above.
