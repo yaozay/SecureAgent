@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
-import { buildPatchPrompt, constructPrompt, getModelTokenLimit, getReviewPrompt, getTokenLength, isConversationWithinLimit, withinModelTokenLimit } from './prompts';
-import { LLModel, PRFile } from './constants';
+import { buildPatchPrompt, buildSuggestionPrompt, constructPrompt, getModelTokenLimit, getReviewPrompt, getSuggestionPrompt, getTokenLength, isConversationWithinLimit, postProcessCodeSuggestions, withinModelTokenLimit } from './prompts';
+import { ChatMessage, CodeSuggestion, LLModel, PRFile } from './constants';
 import { PullRequestEvent } from '@octokit/webhooks-definitions/schema';
 import { axiom } from './logger';
 
@@ -20,11 +20,10 @@ export const logPRInfo = (pullRequest: PullRequestEvent) => {
     return logEvent;
 }
 
-export const reviewDiff = async (diff: string, model: LLModel = "gpt-3.5-turbo") => {
+export const reviewDiff = async (convo: ChatMessage[], model: LLModel = "gpt-3.5-turbo") => {
     const openai = new OpenAI({
         apiKey: process.env.OPENAI_API_KEY,
     });
-    const convo = getReviewPrompt(diff);
     console.log(convo);
     const chatCompletion = await openai.chat.completions.create({
         //@ts-ignore
@@ -35,10 +34,10 @@ export const reviewDiff = async (diff: string, model: LLModel = "gpt-3.5-turbo")
     return chatCompletion.choices[0].message.content;
 }
 
-export const reviewFiles = async (files: PRFile[], model: LLModel) => {
-    const patches = files.map((file) => buildPatchPrompt(file));
-    const diff = patches.join("\n");
-    const feedback = await reviewDiff(diff, model);
+export const reviewFiles = async (files: PRFile[], model: LLModel, patchBuilder: (file: PRFile) => string, convoBuilder: (diff: string) => ChatMessage[]) => {
+    const patches = files.map((file) => patchBuilder(file));
+    const convo = convoBuilder(patches.join("\n"));
+    const feedback = await reviewDiff(convo, model);
     return feedback
 }
 
@@ -74,15 +73,15 @@ const groupFilesByExtension = (files: PRFile[]): Map<string, PRFile[]> => {
 
 
 // all of the files here can be processed with the prompt at minimum
-const processWithinLimitFiles = (files: PRFile[], model: LLModel) => {
+const processWithinLimitFiles = (files: PRFile[], model: LLModel, patchBuilder: (file: PRFile) => string, convoBuilder: (diff: string) => ChatMessage[]) => {
     const processGroups: PRFile[][] = [];
-    const convoWithinModelLimit = isConversationWithinLimit(constructPrompt(files), model);
+    const convoWithinModelLimit = isConversationWithinLimit(constructPrompt(files, patchBuilder, convoBuilder), model);
 
     console.log(`Within model token limits: ${convoWithinModelLimit}`);
     if (!convoWithinModelLimit) {
         const grouped = groupFilesByExtension(files);
         for (const [extension, filesForExt] of grouped.entries()) {
-            const extGroupWithinModelLimit = isConversationWithinLimit(constructPrompt(filesForExt), model);
+            const extGroupWithinModelLimit = isConversationWithinLimit(constructPrompt(filesForExt, patchBuilder, convoBuilder), model);
             if (extGroupWithinModelLimit) {
                 processGroups.push(filesForExt);
             } else { // extension group exceeds model limit
@@ -90,7 +89,7 @@ const processWithinLimitFiles = (files: PRFile[], model: LLModel) => {
                 let currentGroup: PRFile[] = [];
                 filesForExt.sort((a, b) => a.patchTokenLength - b.patchTokenLength);
                 filesForExt.forEach(file => {
-                    const isPotentialGroupWithinLimit = isConversationWithinLimit(constructPrompt([...currentGroup, file]), model);
+                    const isPotentialGroupWithinLimit = isConversationWithinLimit(constructPrompt([...currentGroup, file], patchBuilder, convoBuilder), model);
                     if (isPotentialGroupWithinLimit) {
                         currentGroup.push(file);
                     } else {
@@ -116,27 +115,27 @@ const stripRemovedLines = (originalFile: PRFile) => {
     return { ...originalFile, patch: strippedPatch };
 }
 
-const processOutsideLimitFiles = (files: PRFile[], model: LLModel) => {
+const processOutsideLimitFiles = (files: PRFile[], model: LLModel, patchBuilder: (file: PRFile) => string, convoBuilder: (diff: string) => ChatMessage[]) => {
     const processGroups: PRFile[][] = [];
     if (files.length == 0) {
         return processGroups;
     }
     files = files.map((file) => stripRemovedLines(file));
-    const convoWithinModelLimit = isConversationWithinLimit(constructPrompt(files), model);
+    const convoWithinModelLimit = isConversationWithinLimit(constructPrompt(files, patchBuilder, convoBuilder), model);
     if (convoWithinModelLimit) {
         processGroups.push(files);
     } else {
         const exceedingLimits: PRFile[] = [];
         const withinLimits: PRFile[] = [];
         files.forEach((file) => {
-            const isFileConvoWithinLimits = isConversationWithinLimit((constructPrompt([file])), model);
+            const isFileConvoWithinLimits = isConversationWithinLimit(constructPrompt([file], patchBuilder, convoBuilder), model);
             if (isFileConvoWithinLimits) {
                 withinLimits.push(file);
             } else {
                 exceedingLimits.push(file);
             }
         });
-        const withinLimitsGroup = processWithinLimitFiles(withinLimits, model);
+        const withinLimitsGroup = processWithinLimitFiles(withinLimits, model, patchBuilder, convoBuilder);
         withinLimitsGroup.forEach((group) => {
             processGroups.push(group);
         });
@@ -148,11 +147,12 @@ const processOutsideLimitFiles = (files: PRFile[], model: LLModel) => {
     return processGroups;
 }
 
-
 export const reviewChanges = async (files: PRFile[], model: LLModel = "gpt-3.5-turbo") => {
+    const patchBuilder = buildPatchPrompt;
+    const convoBuilder = getReviewPrompt;
     const filteredFiles = files.filter((file) => filterFile(file));
     filteredFiles.map((file) => {
-        file.patchTokenLength = getTokenLength(buildPatchPrompt(file));
+        file.patchTokenLength = getTokenLength(patchBuilder(file));
     });
     // further subdivide if necessary, maybe group files by common extension?
     const patchesWithinModelLimit: PRFile[] = [];
@@ -160,7 +160,7 @@ export const reviewChanges = async (files: PRFile[], model: LLModel = "gpt-3.5-t
     const patchesOutsideModelLimit: PRFile[] = [];
     
     filteredFiles.forEach((file) => {
-        const patchWithPromptWithinLimit = isConversationWithinLimit(constructPrompt([file]), model);
+        const patchWithPromptWithinLimit = isConversationWithinLimit(constructPrompt([file], patchBuilder, convoBuilder), model);
         if (patchWithPromptWithinLimit) {
             patchesWithinModelLimit.push(file);
         } else {
@@ -169,8 +169,8 @@ export const reviewChanges = async (files: PRFile[], model: LLModel = "gpt-3.5-t
     });
 
     console.log(`files within limits: ${patchesWithinModelLimit.length}`);
-    const withinLimitsPatchGroups = processWithinLimitFiles(patchesWithinModelLimit, model);
-    const exceedingLimitsPatchGroups = processOutsideLimitFiles(patchesOutsideModelLimit, model);
+    const withinLimitsPatchGroups = processWithinLimitFiles(patchesWithinModelLimit, model, patchBuilder, convoBuilder);
+    const exceedingLimitsPatchGroups = processOutsideLimitFiles(patchesOutsideModelLimit, model, patchBuilder, convoBuilder);
     console.log(`${withinLimitsPatchGroups.length} within limits groups.`)
     console.log(`${patchesOutsideModelLimit.length} files outside limit, skipping them.`)
 
@@ -178,10 +178,72 @@ export const reviewChanges = async (files: PRFile[], model: LLModel = "gpt-3.5-t
 
     const feedbacks = await Promise.all(
         groups.map((patchGroup) => {
-            return reviewFiles(patchGroup, model);
+            return reviewFiles(patchGroup, model, patchBuilder, convoBuilder);
         })
     );
     const review = feedbacks.join("\n");
-    // console.log(review);
+    console.log(review);
     return review;
+}
+
+export const generateCodeSuggestions = async (files: PRFile[], model: LLModel = "gpt-3.5-turbo") => {
+    const patchBuilder = buildSuggestionPrompt;
+    const convoBuilder = getSuggestionPrompt;
+    const filteredFiles = files.filter((file) => filterFile(file));
+    filteredFiles.map((file) => {
+        file.patchTokenLength = getTokenLength(patchBuilder(file));
+    });
+    // further subdivide if necessary, maybe group files by common extension?
+    const patchesWithinModelLimit: PRFile[] = [];
+    // these single file patches are larger than the full model context
+    const patchesOutsideModelLimit: PRFile[] = [];
+    
+    filteredFiles.forEach((file) => {
+        const patchWithPromptWithinLimit = isConversationWithinLimit(constructPrompt([file], patchBuilder, convoBuilder), model);
+        if (patchWithPromptWithinLimit) {
+            patchesWithinModelLimit.push(file);
+        } else {
+            patchesOutsideModelLimit.push(file);
+        }
+    });
+
+    console.log(`files within limits: ${patchesWithinModelLimit.length}`);
+    const withinLimitsPatchGroups = processWithinLimitFiles(patchesWithinModelLimit, model, patchBuilder, convoBuilder);
+    const exceedingLimitsPatchGroups = processOutsideLimitFiles(patchesOutsideModelLimit, model, patchBuilder, convoBuilder);
+    console.log(`${withinLimitsPatchGroups.length} within limits groups.`)
+    console.log(`${patchesOutsideModelLimit.length} files outside limit, skipping them.`)
+
+    const groups = [...withinLimitsPatchGroups, ...exceedingLimitsPatchGroups];
+
+    const suggestions = await Promise.all(
+        groups.map((patchGroup) => {
+            return reviewFiles(patchGroup, model, patchBuilder, convoBuilder);
+        })
+    );
+    const codeSuggestions = suggestions.map((suggestion) => JSON.parse(suggestion)["corrections"]).flat(1);
+    const postProcess = postProcessCodeSuggestions(codeSuggestions);
+    return postProcess;
+}
+
+export const processPullRequest = async (files: PRFile[], model: LLModel = "gpt-3.5-turbo", includeSuggestions = false) => {
+    if (includeSuggestions) {
+        const [review, suggestions] = await Promise.all([
+            reviewChanges(files, model),
+            generateCodeSuggestions(files, model)
+        ]);
+
+        return {
+            review,
+            suggestions
+        };
+    } else {
+        const [review] = await Promise.all([
+            reviewChanges(files, model),
+        ]);
+
+        return {
+            review,
+            suggestions: []
+        };
+    }
 }

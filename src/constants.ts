@@ -14,3 +14,22 @@ export interface PRFile {
     previous_filename?: string;
     patchTokenLength?: number;
 };
+
+export interface CodeSuggestion {
+    file: string;
+    line_start: number;
+    line_end: number;
+    correction: string;
+    comment: string;
+}
+
+export interface ChatMessage {
+    role: string;
+    content: string;
+}
+
+
+export interface Review {
+    review: string,
+    suggestions: CodeSuggestion[]
+}
