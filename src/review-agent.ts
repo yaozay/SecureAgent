@@ -29,6 +29,7 @@ export const reviewDiff = async (convo: ChatMessage[], model: LLModel = "gpt-3.5
         //@ts-ignore
         messages: convo,
         model: model,
+        temperature: 0
     });
     console.log("done")
     return chatCompletion.choices[0].message.content;
