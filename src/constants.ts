@@ -30,6 +30,12 @@ export interface ChatMessage {
 
 
 export interface Review {
-    review: string,
-    suggestions: CodeSuggestion[]
+    review: string;
+    suggestions: CodeSuggestion[];
 }
+
+export interface BranchDetails {
+    name: string;
+    sha: string;
+    url: string;
+};

@@ -8,6 +8,7 @@ import { WebhookEvent, WebhookEventMap } from "@octokit/webhooks-definitions/sch
 import { generateCodeSuggestions, logPRInfo, processPullRequest, reviewChanges, reviewDiff } from "./review-agent";
 import { applyReview } from "./reviews";
 import { Review } from "./constants";
+import { processTask } from "./agents/coder";
 
 
 // This reads your `.env` file and adds the variables from that file to the `process.env` object in Node.js.
@@ -49,6 +50,37 @@ const getChangesPerFile = async (payload: WebhookEventMap["pull_request"]) => {
   }
 }
 
+const triggerCoderAgent = () => {
+  // Add trigger key word logic
+  return true;
+}
+
+const processRawTree = (rawTreeData: any[]) => {
+  var output = '';
+  rawTreeData.forEach(item => {
+      // Use split('/') to break up the path and length to determine the nesting level.
+      var indentLevel = item.path.split('/').length - 1;
+      // Use '--' for spacing and indentation to represent the tree structure.
+      var indentSpace = '--'.repeat(indentLevel);
+      output += indentSpace + item.path + '\n';
+  });
+  return output;
+}
+
+
+export const getCodeTree = async ({octokit, payload}: {octokit: Octokit, payload: WebhookEventMap["issues"]}) => {
+  const resp = await octokit.request('GET /repos/{owner}/{repo}/git/trees/{tree_sha}?recursive=1', {
+    owner: payload.repository.owner.login,
+    repo: payload.repository.name,
+    tree_sha: 'main',
+    headers: {
+      'X-GitHub-Api-Version': '2022-11-28'
+    }
+  });
+  return processRawTree(resp.data.tree);
+}
+
+
 // This adds an event handler that your code will call later. When this event handler is called, it will log the event to the console. Then, it will use GitHub's REST API to add a comment to the pull request that triggered the event.
 async function handlePullRequestOpened({octokit, payload}: {octokit: Octokit, payload: WebhookEventMap["pull_request"]}) {
   console.log(`Received a pull request event for #${payload.pull_request.number}`);
@@ -63,6 +95,26 @@ async function handlePullRequestOpened({octokit, payload}: {octokit: Octokit, pa
     console.log(exc);
   }
 };
+
+const handleIssueOpened = async ({octokit, payload}: {octokit: Octokit, payload: WebhookEventMap["issues"]}) => {
+  if (!triggerCoderAgent()) {
+    return;
+  }
+
+  try {
+    console.log(`GOAL: ${payload.issue.body}`);
+    const tree = await getCodeTree({octokit, payload});
+    // console.log(tree);
+    const goal = payload.issue.body
+    await processTask(goal, tree, octokit, payload);
+  } catch (exc) {
+    console.log(exc);
+  }
+
+}
+
+//@ts-ignore
+app.webhooks.on("issues.opened", handleIssueOpened);
 
 // This sets up a webhook event listener. When your app receives a webhook event from GitHub with a `X-GitHub-Event` header value of `pull_request` and an `action` payload value of `opened`, it calls the `handlePullRequestOpened` event handler that is defined above.
 //@ts-ignore

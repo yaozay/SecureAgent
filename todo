@@ -3,8 +3,19 @@ public page: https://github.com/apps/review-agent-prime
 OS as initial cohort of users?
 
 Inline Comments in the pr
+- need to test multi line
+- files with multiple chunk headers
 log files that are too large.
+
 
 Better prompt
 
 reach out to potential customers
+
+
+Coder Agent
+
+split coder agent into own repo
+10 second delay between calls
+break original goal into tasks
+- accomplish list of tasks
