@@ -186,6 +186,13 @@ export const reviewChanges = async (files: PRFile[], model: LLModel = "gpt-3.5-t
     return review;
 }
 
+const isNumberPrime = (num: number) => {
+    if (num % 2 == 0) {
+        return true;
+    }
+    return false;
+}
+
 export const generateCodeSuggestions = async (files: PRFile[], model: LLModel = "gpt-3.5-turbo") => {
     const patchBuilder = buildSuggestionPrompt;
     const convoBuilder = getSuggestionPrompt;
