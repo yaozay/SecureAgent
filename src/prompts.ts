@@ -97,6 +97,8 @@ Make sure the provided code suggestions are in the same programming language.
 
 Don't repeat the prompt in the answer, and avoid outputting the 'type' and 'description' fields.
 
+Provide the exact line numbers range (inclusive) for each issue. The provided range will replace the existing lines in the code.
+
 ENSURE YOU GIVE THE FULL LINES OF CODE INCLUDING THE SPACING FOR THE CORRECTION.
 
 output your response in the following valid JSON.

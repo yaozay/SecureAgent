@@ -29,6 +29,7 @@ export const reviewDiff = async (convo: ChatMessage[], model: LLModel = "gpt-3.5
         //@ts-ignore
         messages: convo,
         model: model,
+        temperature: 0
     });
     console.log("done")
     return chatCompletion.choices[0].message.content;
@@ -184,13 +185,6 @@ export const reviewChanges = async (files: PRFile[], model: LLModel = "gpt-3.5-t
     const review = feedbacks.join("\n");
     console.log(review);
     return review;
-}
-
-const isNumberPrime = (num: number) => {
-    if (num % 2 == 0) {
-        return true;
-    }
-    return false;
 }
 
 export const generateCodeSuggestions = async (files: PRFile[], model: LLModel = "gpt-3.5-turbo") => {
