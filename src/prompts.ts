@@ -142,7 +142,14 @@ export const buildSuggestionPrompt = (file: PRFile) => {
   return `## ${file.filename}\n\n${patchWithLines}`;
 }
 
+const findRelevantCodeForFileDiff = (file: PRFile): string[] => {
+  console.log(file.patch);
+  return [];
+}
+
 export const buildPatchPrompt = (file: PRFile) => {
+  console.log("Finding relevant!!");
+  const relevantCodeChanges = findRelevantCodeForFileDiff(file);
   return `## ${file.filename}\n\n${file.patch}`;
 }
 

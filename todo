@@ -54,13 +54,11 @@ Code Agent:
 npx smee -u https://smee.io/MF6U75MXyDtxZVI -t http://localhost:3000/api/code
 
 NOW!
-text Akbar about B2B sales people he knows
-get simple task working - DONE
-deploy code agent - PENDING
-verify code agent + review bot are working - PENDING
-ask Robert to add you to github, the code bot - PENDING
-ask Mo to intro me to people he told about my repo
 Generalize to multiple repo types
 
 Follow up with everyone on twitter + email
 reach out to 10 potential users
+
+
+how much of the full file is the llm actually getting
+what is in the patch?

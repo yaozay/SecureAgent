@@ -1,6 +1,6 @@
 import { BranchDetails, CodeSuggestion, Review, processGitFilepath } from "./constants";
 import { Octokit } from "@octokit/rest";
-import { WebhookEvent, WebhookEventMap } from "@octokit/webhooks-definitions/schema";
+import { WebhookEventMap } from "@octokit/webhooks-definitions/schema";
 
 
 const postGeneralReviewComment = async (octokit: Octokit, payload: WebhookEventMap["pull_request"], review: string) => {
