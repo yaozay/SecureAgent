@@ -1,4 +1,4 @@
-import { BranchDetails, CodeSuggestion, Review } from "./constants";
+import { BranchDetails, CodeSuggestion, Review, processGitFilepath } from "./constants";
 import { Octokit } from "@octokit/rest";
 import { WebhookEvent, WebhookEventMap } from "@octokit/webhooks-definitions/schema";
 
@@ -86,7 +86,7 @@ const getGitFile = async (octokit: Octokit, payload: WebhookEventMap["issues"], 
 }
 
 export const getFileContents = async (octokit: Octokit, payload: WebhookEventMap["issues"], branch: BranchDetails, filepath: string) => {
-    const gitFile = await getGitFile(octokit, payload, branch, filepath);
+    const gitFile = await getGitFile(octokit, payload, branch, processGitFilepath(filepath));
     return parseJS(gitFile.content);
 }
 
@@ -144,11 +144,11 @@ export const createBranch = async (octokit: Octokit, payload: WebhookEventMap["i
 
 export const editFileContents = async (octokit: Octokit, payload: WebhookEventMap["issues"], branch: BranchDetails, filepath: string, code: string, lineStart: number, lineEnd: number) => {
     try {
-        let fileContent = await getGitFile(octokit, payload, branch, filepath)
+        let fileContent = await getGitFile(octokit, payload, branch, processGitFilepath(filepath))
 
         let lines = fileContent.content.split('\n');
         const codeLines = code.split('\n').filter((line) => line.length > 0);
-        lines.splice(lineStart - 1, codeLines.length, code);
+        lines.splice(lineStart <= 0 ? 0 : lineStart - 1, codeLines.length, code);
         const updatedContent = lines.join('\n');
 
         const encodedContent = Buffer.from(updatedContent).toString('base64');

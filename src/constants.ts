@@ -39,3 +39,12 @@ export interface BranchDetails {
     sha: string;
     url: string;
 };
+
+export const sleep = async (ms: number) => {
+    return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+export const processGitFilepath = (filepath: string) => {
+    // Remove the leading '/' if it exists
+    return filepath.startsWith('/') ? filepath.slice(1) : filepath;
+}

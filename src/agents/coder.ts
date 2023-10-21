@@ -1,11 +1,11 @@
 import OpenAI from 'openai';
-import { BranchDetails, ChatMessage } from '../constants';
-import { LLM_FUNCTIONS, LLM_FUNCTION_MAP, getCodeAgentPrompt } from '../prompts/code-prompt';
+import { BranchDetails, ChatMessage, sleep } from '../constants';
+import { LLM_FUNCTIONS, LLM_FUNCTION_MAP, TASK_LLM_FUNCTION, getCodeAgentPrompt, getTaskBreakdownPrompt } from '../prompts/code-prompt';
 import { Octokit } from "@octokit/rest";
 import { WebhookEventMap } from "@octokit/webhooks-definitions/schema";
 import { createBranch } from '../reviews';
 
-const runStep = async (convo: ChatMessage[], actions: any[], octokit: Octokit, payload: WebhookEventMap["issues"], branch: BranchDetails) => {
+const chatFunctions = async (convo: ChatMessage[], funcs: any) => {
     const openai = new OpenAI({
         apiKey: process.env.OPENAI_API_KEY,
     });
@@ -14,9 +14,30 @@ const runStep = async (convo: ChatMessage[], actions: any[], octokit: Octokit, p
         model: "gpt-4-0613",
         //@ts-ignore
         messages: convo,
-        functions: LLM_FUNCTIONS,
+        functions: funcs,
         function_call: "auto"
     });
+    return response;
+}
+
+const postprocessTasks = (tasks: string[]) => {
+    return tasks.map((task, idx) => `${idx+1}. ${task}`);
+}
+
+const generateTaskList = async (goal: string) => {
+    const convo = getTaskBreakdownPrompt(goal);
+    const response = await chatFunctions(convo, TASK_LLM_FUNCTION);
+    const responseMessage = response.choices[0].message;
+    console.log(responseMessage);
+    if (!responseMessage.function_call) {
+        throw "DID NOT CALL A FUNCTION";
+    }
+    const subtasks: string[] = JSON.parse(responseMessage.function_call.arguments)["tasks"];
+    return subtasks;
+}
+
+const runStep = async (convo: ChatMessage[], actions: any[], octokit: Octokit, payload: WebhookEventMap["issues"], branch: BranchDetails) => {
+    const response = await chatFunctions(convo, LLM_FUNCTIONS);
     const responseMessage = response.choices[0].message;
     console.log("GPT RESPONSE:")
     console.log(responseMessage);
@@ -28,29 +49,39 @@ const runStep = async (convo: ChatMessage[], actions: any[], octokit: Octokit, p
         const [f, args] = funtionInfo;
         console.log(args);
         const functionArgs = JSON.parse(responseMessage.function_call.arguments);
-        const passingArgs = args.map((arg: string) => {
+        
+        const passingArgs: any[] = [];
+        let relevantTask: number = null;
+        args.forEach((arg: string) => {
             if (arg == "octokit") {
-                return octokit;
+                passingArgs.push(octokit);
             } else if (arg == "payload") {
-                return payload;
+                passingArgs.push(payload);
             } else if (arg == "branch") {
-                return branch;
+                passingArgs.push(branch);
+            } else if (arg == "taskNumber") { 
+                relevantTask = functionArgs["taskNumber"];
+            } else {
+                passingArgs.push(functionArgs[arg]);
             }
-            return functionArgs[arg];
         });
-        if (actions.length > 0) {
-            const pendingAction = [functionName, functionArgs];
-            const lastAction = actions[actions.length - 1];
-            if (JSON.stringify(pendingAction) === JSON.stringify(lastAction)) {
-                throw new Error("Repeating action!");
-            }
-        }
+        // if (actions.length > 0) {
+        //     const pendingAction = [functionName, functionArgs];
+        //     const lastAction = actions[actions.length - 1];
+        //     if (JSON.stringify(pendingAction) === JSON.stringify(lastAction)) {
+        //         throw new Error("Repeating action!");
+        //     }
+        // }
         actions.push([functionName, functionArgs]);
         console.log("CALLING");
         console.log(passingArgs.length);
         const functionResponse = await f(...passingArgs);
         console.log("CALLED");
-        return functionResponse;
+        return {
+            "stepResult": functionResponse,
+            "relevantTask": relevantTask,
+            "functionName": functionName
+        }
     }
     //     return functionResponse;
         // messages.push(responseMessage);  // extend conversation with assistant's reply
@@ -71,23 +102,44 @@ const runStep = async (convo: ChatMessage[], actions: any[], octokit: Octokit, p
 
 export const processTask = async (goal: string, tree: string, octokit: Octokit, payload: WebhookEventMap["issues"]) => {
     const branch = await createBranch(octokit, payload);
+
+    // let tasks = await generateTaskList(goal);
+
+    // const convo = getCodeAgentPrompt(goal, postprocessTasks(tasks).join("\n"), tree);
     const convo = getCodeAgentPrompt(goal, tree);
     const actions: any[] = [];
-    // console.log(convo);
-    const stepLimit = 10;
+    console.log(convo);
+    const stepLimit = 5;
     let stepCount = 0;
     while (stepCount < stepLimit) {
-        console.log(`ON: ${stepCount}/${stepLimit}`);
+        console.log(`ON: ${stepCount + 1}/${stepLimit}`);
         try {
-            const stepResult = await runStep(convo, actions, octokit, payload, branch);
+            const step = await runStep(convo, actions, octokit, payload, branch);
+            console.log(step);
+            const { stepResult, relevantTask, functionName } = step;
             // console.log(stepResult);
             convo.push({"role": "user", "content": stepResult});
+            // if (functionName == "edit") {
+            //     console.log("EDIT updating task list.");
+            //     let remTasks = [tasks[tasks.length-1]];
+            //     if (relevantTask < tasks.length) { 
+            //         remTasks = tasks.slice(relevantTask);
+            //     }
+                
+            //     // overwriting tasks
+            //     tasks = remTasks;
+
+            //     convo.push({"role": "user", "content": `Tasks:\n${postprocessTasks(tasks).join("\n")}`})
+
+            //     console.log(`REMAINING TASKS: ${postprocessTasks(tasks).join("\n")}`);
+            // }
         } catch (exc) {
             console.log(exc);
             console.log("EXITING");
             break;
         }
-        console.log(`DONE: ${stepCount}/${stepLimit}`);
+        console.log(`DONE: ${stepCount + 1}/${stepLimit}`);
+        await sleep(5000);
         stepCount += 1;
     }
     console.log(convo);
