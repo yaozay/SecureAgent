@@ -8,3 +8,19 @@ log files that are too large.
 Better prompt
 
 reach out to potential customers
+ERROR in suggestions:
+6. In `src/constants.ts`, the `processGitFilepath` function removes the leading '/' from the filepath. However, it doesn't handle the case where the filepath is null or undefined. Consider adding error handling for this case.
+7. In `src/prompts/code-prompt.ts`, the `getTaskBreakdownPrompt` and `getCodeAgentPrompt` functions return an array of `ChatMessage`. However, there's no error handling if the input parameters are null or undefined. Consider adding error handling for these cases.
+done
+SyntaxError: Unexpected end of JSON input
+at JSON.parse (<anonymous>)
+at /app/dist/review-agent.js:215:66
+at Array.map (<anonymous>)
+at /app/dist/review-agent.js:215:41
+at Generator.next (<anonymous>)
+at fulfilled (/app/dist/review-agent.js:5:58)
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+
+Need to try catch suggestions
+figure out what's going wrong here actually.
+Convert the suggestions into a proper function call
