@@ -3,8 +3,48 @@ public page: https://github.com/apps/review-agent-prime
 OS as initial cohort of users?
 
 Inline Comments in the pr
+- files with multiple chunk headers
 log files that are too large.
+
 
 Better prompt
 
 reach out to potential customers
+
+
+Coder Agent
+
+break original goal into tasks
+- accomplish list of tasks
+Determine when goal is achieved
+
+Need to be able to self determine when task is done, should not be limited to 5 steps!
+
+move to next step after editing a file
+
+the edit function should insert NOT overwrite (this causes too many issues).
+Does not take into account full context of the files, need to figure this out
+
+relevantTask is not accurate (remove?)
+
+
+how to determine when a task is achieved
+- a task may take multiple steps
+
+testing:
+Review Agent:
+npx smee -u https://smee.io/YqB94vEuKQJQXo4v -t http://localhost:3000/api/review
+Code Agent:
+npx smee -u https://smee.io/MF6U75MXyDtxZVI -t http://localhost:3000/api/code
+
+NOW!
+text Akbar about B2B sales people he knows
+get simple task working - DONE
+deploy code agent - PENDING
+verify code agent + review bot are working - PENDING
+ask Robert to add you to github, the code bot - PENDING
+ask Mo to intro me to people he told about my repo
+Generalize to multiple repo types
+
+Follow up with everyone on twitter + email
+reach out to 10 potential users
