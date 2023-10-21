@@ -31,7 +31,6 @@ export const reviewDiff = async (convo: ChatMessage[], model: LLModel = "gpt-3.5
         model: model,
         temperature: 0
     });
-    console.log("done")
     return chatCompletion.choices[0].message.content;
 }
 
@@ -207,23 +206,27 @@ export const generateCodeSuggestions = async (files: PRFile[], model: LLModel = 
             patchesOutsideModelLimit.push(file);
         }
     });
+    try {
+        console.log(`files within limits: ${patchesWithinModelLimit.length}`);
+        const withinLimitsPatchGroups = processWithinLimitFiles(patchesWithinModelLimit, model, patchBuilder, convoBuilder);
+        const exceedingLimitsPatchGroups = processOutsideLimitFiles(patchesOutsideModelLimit, model, patchBuilder, convoBuilder);
+        console.log(`${withinLimitsPatchGroups.length} within limits groups.`)
+        console.log(`${patchesOutsideModelLimit.length} files outside limit, skipping them.`)
 
-    console.log(`files within limits: ${patchesWithinModelLimit.length}`);
-    const withinLimitsPatchGroups = processWithinLimitFiles(patchesWithinModelLimit, model, patchBuilder, convoBuilder);
-    const exceedingLimitsPatchGroups = processOutsideLimitFiles(patchesOutsideModelLimit, model, patchBuilder, convoBuilder);
-    console.log(`${withinLimitsPatchGroups.length} within limits groups.`)
-    console.log(`${patchesOutsideModelLimit.length} files outside limit, skipping them.`)
+        const groups = [...withinLimitsPatchGroups, ...exceedingLimitsPatchGroups];
 
-    const groups = [...withinLimitsPatchGroups, ...exceedingLimitsPatchGroups];
-
-    const suggestions = await Promise.all(
-        groups.map((patchGroup) => {
-            return reviewFiles(patchGroup, model, patchBuilder, convoBuilder);
-        })
-    );
-    const codeSuggestions = suggestions.map((suggestion) => JSON.parse(suggestion)["corrections"]).flat(1);
-    const postProcess = postProcessCodeSuggestions(codeSuggestions);
-    return postProcess;
+        const suggestions = await Promise.all(
+            groups.map((patchGroup) => {
+                return reviewFiles(patchGroup, model, patchBuilder, convoBuilder);
+            })
+        );
+        const codeSuggestions = suggestions.map((suggestion) => JSON.parse(suggestion)["corrections"]).flat(1);
+        const postProcess = postProcessCodeSuggestions(codeSuggestions);
+        return postProcess;
+    } catch (exc) {
+        console.log(exc);
+        return [];
+    }
 }
 
 export const processPullRequest = async (files: PRFile[], model: LLModel = "gpt-3.5-turbo", includeSuggestions = false) => {
