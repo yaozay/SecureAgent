@@ -1,6 +1,6 @@
 import { BranchDetails, CodeSuggestion, Review, processGitFilepath } from "./constants";
 import { Octokit } from "@octokit/rest";
-import { WebhookEvent, WebhookEventMap } from "@octokit/webhooks-definitions/schema";
+import { WebhookEventMap } from "@octokit/webhooks-definitions/schema";
 
 
 const postGeneralReviewComment = async (octokit: Octokit, payload: WebhookEventMap["pull_request"], review: string) => {
@@ -60,12 +60,13 @@ export const applyReview = async ({octokit, payload, review}: {octokit: Octokit,
     ]);
 }
 
-const parseJS = (contents: string) => {
-    const prepended = contents.split("\n").map((line, idx) => `${idx+1}: ${line}`).join("\n");
+const addLineNumbers = (contents: string) => {
+    const rawContents = String.raw`${contents}`;
+    const prepended = rawContents.split("\n").map((line, idx) => `${idx+1}: ${line}`).join("\n");
     return prepended;
 }
 
-const getGitFile = async (octokit: Octokit, payload: WebhookEventMap["issues"], branch: BranchDetails, filepath: string) => {
+export const getGitFile = async (octokit: Octokit, payload: WebhookEventMap["issues"] | WebhookEventMap["pull_request"], branch: BranchDetails, filepath: string) => {
     try {
         const response = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
             owner: payload.repository.owner.login,
@@ -82,12 +83,16 @@ const getGitFile = async (octokit: Octokit, payload: WebhookEventMap["issues"], 
         return {"content": decodedContent, "sha": response.data.sha};
     } catch (exc) {
         console.log(exc);
+        if (exc.status === 404) {
+            return {"content": null, "sha": null};
+        }
+        throw exc;
     }
 }
 
 export const getFileContents = async (octokit: Octokit, payload: WebhookEventMap["issues"], branch: BranchDetails, filepath: string) => {
     const gitFile = await getGitFile(octokit, payload, branch, processGitFilepath(filepath));
-    return parseJS(gitFile.content);
+    return addLineNumbers(gitFile.content);
 }
 
 export const createBranch = async (octokit: Octokit, payload: WebhookEventMap["issues"]) => {
@@ -145,9 +150,11 @@ export const createBranch = async (octokit: Octokit, payload: WebhookEventMap["i
 export const editFileContents = async (octokit: Octokit, payload: WebhookEventMap["issues"], branch: BranchDetails, filepath: string, code: string, lineStart: number, lineEnd: number) => {
     try {
         let fileContent = await getGitFile(octokit, payload, branch, processGitFilepath(filepath))
+        const rawContents = String.raw`${fileContent.content}`;
+        const rawCode = String.raw`${code}`;
 
-        let lines = fileContent.content.split('\n');
-        const codeLines = code.split('\n').filter((line) => line.length > 0);
+        let lines = rawContents.split('\n');
+        const codeLines = rawCode.split('\n').filter((line) => line.length > 0);
         lines.splice(lineStart <= 0 ? 0 : lineStart - 1, codeLines.length, code);
         const updatedContent = lines.join('\n');
 

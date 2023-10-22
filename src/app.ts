@@ -101,7 +101,7 @@ async function handlePullRequestOpened({octokit, payload}: {octokit: Octokit, pa
   try {
     logPRInfo(payload);
     const files = await getChangesPerFile(payload);
-    const review: Review = await processPullRequest(files, "gpt-4", canInlineSuggest);
+    const review: Review = await processPullRequest(octokit, payload, files, "gpt-4", canInlineSuggest);
     await applyReview({octokit, payload, review})
     console.log("Review Submitted");
   } catch (exc) {
