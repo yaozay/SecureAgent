@@ -112,7 +112,7 @@ const processWithinLimitFiles = (files: PRFile[], model: LLModel, patchBuilder: 
 
 const stripRemovedLines = (originalFile: PRFile) => {
     // remove lines starting with a '-'
-    const originalPatch = originalFile.patch;
+    const originalPatch = String.raw`${originalFile.patch}`;
     const strippedPatch = originalPatch.split('\n').filter(line => !line.startsWith('-')).join('\n');
     return { ...originalFile, patch: strippedPatch };
 }
@@ -238,7 +238,7 @@ const preprocessFile = async (octokit: Octokit, payload: WebhookEventMap["pull_r
         url: payload.pull_request.url
     };
     const contents = await getGitFile(octokit, payload, branch, file.filename);
-    file.old_contents = contents.content;
+    file.old_contents = String.raw`${contents.content}`;
 }
 
 export const processPullRequest = async (octokit: Octokit, payload: WebhookEventMap["pull_request"], files: PRFile[], model: LLModel = "gpt-3.5-turbo", includeSuggestions = false) => {

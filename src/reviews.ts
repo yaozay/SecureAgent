@@ -60,8 +60,8 @@ export const applyReview = async ({octokit, payload, review}: {octokit: Octokit,
     ]);
 }
 
-const parseJS = (contents: string) => {
-    const prepended = contents.split("\n").map((line, idx) => `${idx+1}: ${line}`).join("\n");
+const addLineNumbers = (contents: string) => {
+    const prepended = String.raw`${contents}`.split("\n").map((line, idx) => `${idx+1}: ${line}`).join("\n");
     return prepended;
 }
 
@@ -87,7 +87,7 @@ export const getGitFile = async (octokit: Octokit, payload: WebhookEventMap["iss
 
 export const getFileContents = async (octokit: Octokit, payload: WebhookEventMap["issues"], branch: BranchDetails, filepath: string) => {
     const gitFile = await getGitFile(octokit, payload, branch, processGitFilepath(filepath));
-    return parseJS(gitFile.content);
+    return addLineNumbers(gitFile.content);
 }
 
 export const createBranch = async (octokit: Octokit, payload: WebhookEventMap["issues"]) => {
@@ -146,8 +146,8 @@ export const editFileContents = async (octokit: Octokit, payload: WebhookEventMa
     try {
         let fileContent = await getGitFile(octokit, payload, branch, processGitFilepath(filepath))
 
-        let lines = fileContent.content.split('\n');
-        const codeLines = code.split('\n').filter((line) => line.length > 0);
+        let lines = String.raw`${fileContent.content}`.split('\n');
+        const codeLines = String.raw`${code}`.split('\n').filter((line) => line.length > 0);
         lines.splice(lineStart <= 0 ? 0 : lineStart - 1, codeLines.length, code);
         const updatedContent = lines.join('\n');
 
