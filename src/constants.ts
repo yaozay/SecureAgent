@@ -13,6 +13,7 @@ export interface PRFile {
     patch?: string;
     previous_filename?: string;
     patchTokenLength?: number;
+    old_contents?: string;
 };
 
 export interface CodeSuggestion {

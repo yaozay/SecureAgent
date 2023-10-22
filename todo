@@ -62,3 +62,8 @@ reach out to 10 potential users
 
 how much of the full file is the llm actually getting
 what is in the patch?
+
+
+minimum: get the function context of the diff and use that as general context
+potentially build a call chain for functions in changes
+upstream -> code change -> downstream

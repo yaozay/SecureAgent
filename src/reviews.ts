@@ -65,7 +65,7 @@ const parseJS = (contents: string) => {
     return prepended;
 }
 
-const getGitFile = async (octokit: Octokit, payload: WebhookEventMap["issues"], branch: BranchDetails, filepath: string) => {
+export const getGitFile = async (octokit: Octokit, payload: WebhookEventMap["issues"] | WebhookEventMap["pull_request"], branch: BranchDetails, filepath: string) => {
     try {
         const response = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
             owner: payload.repository.owner.login,

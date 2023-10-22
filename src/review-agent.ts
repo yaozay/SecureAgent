@@ -1,8 +1,10 @@
 import OpenAI from 'openai';
 import { buildPatchPrompt, buildSuggestionPrompt, constructPrompt, getModelTokenLimit, getReviewPrompt, getSuggestionPrompt, getTokenLength, isConversationWithinLimit, postProcessCodeSuggestions, withinModelTokenLimit } from './prompts';
-import { ChatMessage, CodeSuggestion, LLModel, PRFile } from './constants';
-import { PullRequestEvent } from '@octokit/webhooks-definitions/schema';
+import { BranchDetails, ChatMessage, CodeSuggestion, LLModel, PRFile } from './constants';
+import { PullRequestEvent, WebhookEventMap } from '@octokit/webhooks-definitions/schema';
 import { axiom } from './logger';
+import { Octokit } from '@octokit/rest';
+import { getGitFile } from './reviews';
 
 interface PRLogEvent {
     id: number;
@@ -229,7 +231,20 @@ export const generateCodeSuggestions = async (files: PRFile[], model: LLModel = 
     }
 }
 
-export const processPullRequest = async (files: PRFile[], model: LLModel = "gpt-3.5-turbo", includeSuggestions = false) => {
+const preprocessFile = async (octokit: Octokit, payload: WebhookEventMap["pull_request"], file: PRFile) => {
+    const branch: BranchDetails = {
+        name: payload.pull_request.base.ref,
+        sha: payload.pull_request.base.sha,
+        url: payload.pull_request.url
+    };
+    const contents = await getGitFile(octokit, payload, branch, file.filename);
+    file.old_contents = contents.content;
+}
+
+export const processPullRequest = async (octokit: Octokit, payload: WebhookEventMap["pull_request"], files: PRFile[], model: LLModel = "gpt-3.5-turbo", includeSuggestions = false) => {
+    await Promise.all(files.map((file) => {
+        return preprocessFile(octokit, payload, file)
+    }));
     if (includeSuggestions) {
         const [review, suggestions] = await Promise.all([
             reviewChanges(files, model),
