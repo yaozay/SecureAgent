@@ -239,7 +239,11 @@ const preprocessFile = async (octokit: Octokit, payload: WebhookEventMap["pull_r
     };
     // Handle scenario where file does not exist!!
     const contents = await getGitFile(octokit, payload, branch, file.filename);
-    file.old_contents = String.raw`${contents.content}`;
+    if (contents.content == null) {
+        file.old_contents = null
+    } else {
+        file.old_contents = String.raw`${contents.content}`;
+    }
 }
 
 export const processPullRequest = async (octokit: Octokit, payload: WebhookEventMap["pull_request"], files: PRFile[], model: LLModel = "gpt-3.5-turbo", includeSuggestions = false) => {

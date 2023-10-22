@@ -187,12 +187,23 @@ const expandFileLines = (file: PRFile, linesAbove: number = 5, linesBelow: numbe
   return expandedLines;
 };
 
-
-
-export const buildPatchPrompt = (file: PRFile) => {
+const expandedPatchStrategy = (file: PRFile) => {
   const expandedPatches = expandFileLines(file);
   const expansions = expandedPatches.map((patchLines) => patchLines.join("\n")).join("\n\n")
   return `## ${file.filename}\n\n${expansions}`;
+}
+
+const rawPatchStrategy = (file: PRFile) => {
+  return `## ${file.filename}\n\n${file.patch}`;
+}
+
+
+export const buildPatchPrompt = (file: PRFile) => {
+  if (file.old_contents == null) {
+    return rawPatchStrategy(file);
+  } else {
+    return expandedPatchStrategy(file);
+  }
 }
 
 export const getReviewPrompt = (diff: string): ChatMessage[] => {
