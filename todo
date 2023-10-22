@@ -57,3 +57,13 @@ Generalize to multiple repo types
 
 Follow up with everyone on twitter + email
 reach out to 10 potential users
+
+TODO 10/22
+- function context for js (py?)
+- better agents
+- logging
+- replay logging
+
+DEBUG
+- why did robert's pr get bad feedback?
+-- https://github.com/r-cha/concerto/pull/31
