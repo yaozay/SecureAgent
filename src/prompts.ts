@@ -151,7 +151,8 @@ const assignLineNumbers = (diff: string) => {
 }
 
 export const buildSuggestionPrompt = (file: PRFile) => {
-  const patchWithLines = assignLineNumbers(String.raw`${file.patch}`);
+  const rawPatch = String.raw`${file.patch}`;
+  const patchWithLines = assignLineNumbers(rawPatch);
   return `## ${file.filename}\n\n${patchWithLines}`;
 }
 

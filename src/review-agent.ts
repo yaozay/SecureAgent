@@ -237,6 +237,7 @@ const preprocessFile = async (octokit: Octokit, payload: WebhookEventMap["pull_r
         sha: payload.pull_request.base.sha,
         url: payload.pull_request.url
     };
+    // Handle scenario where file does not exist!!
     const contents = await getGitFile(octokit, payload, branch, file.filename);
     file.old_contents = String.raw`${contents.content}`;
 }
