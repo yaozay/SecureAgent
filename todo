@@ -52,11 +52,12 @@ Generalize to multiple repo types
 Follow up with everyone on twitter + email
 reach out to 10 potential users
 
+TODO 10/22
+- function context for js (py?)
+- better agents
+- logging
+- replay logging
 
-how much of the full file is the llm actually getting
-what is in the patch?
-
-
-minimum: get the function context of the diff and use that as general context
-potentially build a call chain for functions in changes
-upstream -> code change -> downstream
+DEBUG
+- why did robert's pr get bad feedback?
+-- https://github.com/r-cha/concerto/pull/31
