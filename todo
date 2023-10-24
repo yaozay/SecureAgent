@@ -36,6 +36,10 @@ Need to be able to self determine when task is done, should not be limited to 5 
 
 move to next step after editing a file
 
+MUST OPEN FILE BEFORE EDIT can be called on the file!
+Breakdown each edit into steps before executing edit.
+Embed and query goal against repo embeddings to get inital set of relevant files... Maybe preload context?
+
 the edit function should insert NOT overwrite (this causes too many issues).
 Does not take into account full context of the files, need to figure this out
 
