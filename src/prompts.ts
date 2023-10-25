@@ -1,18 +1,6 @@
 import { encode, isWithinTokenLimit, encodeChat } from 'gpt-tokenizer';
-import { BranchDetails, ChatMessage, CodeSuggestion, LLModel, PRFile } from './constants';
+import { BranchDetails, ChatMessage, CodeSuggestion, LLModel, PRFile, PatchInfo } from './constants';
 import * as diff from 'diff';
-
-// an interface for the parsed patch
-interface PatchInfo {
-  hunks: {
-    oldStart: number,
-    oldLines: number,
-    newStart: number,
-    newLines: number,
-    lines: string[]
-  }[]
-}
-
 
 const ModelsToTokenLimits = new Map<string, number>([
   ["gpt-3.5-turbo", 4096],

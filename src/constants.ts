@@ -16,6 +16,16 @@ export interface PRFile {
     old_contents?: string;
 };
 
+export interface PatchInfo {
+    hunks: {
+      oldStart: number,
+      oldLines: number,
+      newStart: number,
+      newLines: number,
+      lines: string[]
+    }[]
+}
+
 export interface CodeSuggestion {
     file: string;
     line_start: number;

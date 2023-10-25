@@ -7,3 +7,4 @@ review-agent-test-pk.pem
 *.pem
 .DS_Store
 src/test.ts
+src/tests
