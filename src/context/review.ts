@@ -129,7 +129,8 @@ const functionalContextPerHunk = (currentFile: string, hunk: diff.Hunk) => {
         sourceType: 'module',
         plugins: ['jsx', 'typescript'], // To allow JSX and TypeScript
     });
-    let enclosingFunctions: any[] = [];
+    let largestEnclosingFunction: any = null;
+    let largestSize = 0;
     const insertions = hunk.lines.filter((line) => line.startsWith("+")).length;
     const lineStart = hunk.newStart;
     const lineEnd = lineStart + insertions;
@@ -137,16 +138,17 @@ const functionalContextPerHunk = (currentFile: string, hunk: diff.Hunk) => {
         Function(path) {
             const { start, end } = path.node.loc;
             if (start.line <= lineStart && lineEnd <= end.line) {
-            enclosingFunctions.push(path.node);
+                const size = end.line - start.line;
+                if (size > largestSize) {
+                    largestSize = size;
+                    largestEnclosingFunction = path.node;
+                }
             }
         },
     });
-    if (enclosingFunctions.length == 0) {
-        throw new Error("An enclosing function could not be found.");
-    }
-    enclosingFunctions.map((func) => {
-        const functionStartLine = func.loc.start.line;
-        const functionEndLine = func.loc.end.line;
+    if (largestEnclosingFunction) {
+        const functionStartLine = largestEnclosingFunction.loc.start.line;
+        const functionEndLine = largestEnclosingFunction.loc.end.line;
         const updatedFileLines = currentFile.split('\n');
         const functionContext = updatedFileLines.slice(functionStartLine - 1, functionEndLine);
         const injectionIdx = injectionPoint(hunk);
@@ -163,15 +165,17 @@ const functionalContextPerHunk = (currentFile: string, hunk: diff.Hunk) => {
         });
         const injected = holder.join("\n");
         res.push(injected);
-    });
-    return res;
+        return res;
+    } else {
+        throw new Error("An enclosing function could not be found.");
+    }
 }
 
 const diffContextPerHunk = (file: PRFile) => {
     const updatedFile = diff.applyPatch(file.old_contents, file.patch);
     const patches = diff.parsePatch(file.patch);
     if (!updatedFile) {
-        console.log("APPLYING PATCH ERROR");
+        console.log("APPLYING PATCH ERROR - FALLINGBACK");
         // return fallback
         throw "THIS SHOULD NOT HAPPEN!"
     }
@@ -202,9 +206,24 @@ const diffContextPerHunk = (file: PRFile) => {
     }
 }
 
-export const functionContextPatchStrategy = (file: PRFile) => {
+const functionContextPatchStrategy = (file: PRFile) => {
     console.log("USING DIFF FUNCTION CONTEXT STRATEGY");
     const contextChunks = diffContextPerHunk(file);
-    const res = `## ${file.filename}\n\n${contextChunks.join("\n")}`;
+    let res = null;
+    try {
+        res = `## ${file.filename}\n\n${contextChunks.join("\n\n")}`;
+    } catch (exc) {
+        res = expandedPatchStrategy(file);
+    }
     return res;
+}
+
+export const smarterContextPatchStrategy = (file: PRFile) => {
+    const fileExtension = file.filename.split('.').pop().toLowerCase();
+    const extensionsSupportingFunctionalContext = ['ts', 'tsx', 'js', 'jsx'];
+    if (extensionsSupportingFunctionalContext.includes(fileExtension)) {
+        return functionContextPatchStrategy(file);
+    } else {
+        return expandedPatchStrategy(file);
+    }
 }

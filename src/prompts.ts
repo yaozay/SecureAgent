@@ -1,6 +1,6 @@
 import { encode, isWithinTokenLimit, encodeChat } from 'gpt-tokenizer';
 import { BranchDetails, ChatMessage, CodeSuggestion, LLModel, PRFile } from './constants';
-import { expandedPatchStrategy, functionContextPatchStrategy, rawPatchStrategy } from './context/review';
+import { expandedPatchStrategy, smarterContextPatchStrategy, rawPatchStrategy } from './context/review';
 
 const ModelsToTokenLimits = new Map<string, number>([
   ["gpt-3.5-turbo", 4096],
@@ -149,7 +149,7 @@ export const buildPatchPrompt = (file: PRFile) => {
   if (file.old_contents == null) {
     return rawPatchStrategy(file);
   } else {
-    return functionContextPatchStrategy(file);
+    return smarterContextPatchStrategy(file);
   }
 }
 
