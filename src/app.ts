@@ -63,7 +63,7 @@ const getChangesPerFile = async (payload: WebhookEventMap["pull_request"]) => {
 }
 
 const triggerCoderAgent = (body: string) => {
-  return body.toLocaleLowerCase().startsWith("codebot");
+  return body.toLowerCase().startsWith("codebot");
 }
 
 const processRawTree = (rawTreeData: any[]) => {
