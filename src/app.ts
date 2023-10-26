@@ -48,6 +48,8 @@ const codeApp = new App({
   },
 });
 
+const CODEBOT_TRIGGER = devEnv ? "xcodebot" : "codebot";
+
 const getChangesPerFile = async (payload: WebhookEventMap["pull_request"]) => {
   try {
     const { data: files } = await (await reviewApp.getInstallationOctokit(payload.installation.id)).rest.pulls.listFiles({
@@ -63,7 +65,7 @@ const getChangesPerFile = async (payload: WebhookEventMap["pull_request"]) => {
 }
 
 const triggerCoderAgent = (body: string) => {
-  return body.toLowerCase().startsWith("codebot");
+  return body.toLowerCase().startsWith(CODEBOT_TRIGGER);
 }
 
 const processRawTree = (rawTreeData: any[]) => {
@@ -116,8 +118,7 @@ const handleIssueOpened = async ({octokit, payload}: {octokit: Octokit, payload:
   try {
     console.log(`GOAL: ${payload.issue.body}`);
     const tree = await getCodeTree({octokit, payload});
-    // console.log(tree);
-    const goal = payload.issue.body.replace(/codebot/i, '').trim();
+    const goal = payload.issue.body.replace(new RegExp(CODEBOT_TRIGGER, 'i'), '').trim();
     await processTask(goal, tree, octokit, payload);
   } catch (exc) {
     console.log(exc);
