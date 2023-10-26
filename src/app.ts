@@ -62,9 +62,8 @@ const getChangesPerFile = async (payload: WebhookEventMap["pull_request"]) => {
   }
 }
 
-const triggerCoderAgent = () => {
-  // Add trigger key word logic
-  return true;
+const triggerCoderAgent = (body: string) => {
+  return body.toLowerCase().startsWith("codebot");
 }
 
 const processRawTree = (rawTreeData: any[]) => {
@@ -110,7 +109,7 @@ async function handlePullRequestOpened({octokit, payload}: {octokit: Octokit, pa
 };
 
 const handleIssueOpened = async ({octokit, payload}: {octokit: Octokit, payload: WebhookEventMap["issues"]}) => {
-  if (!triggerCoderAgent()) {
+  if (!triggerCoderAgent(payload.issue.body)) {
     return;
   }
 
