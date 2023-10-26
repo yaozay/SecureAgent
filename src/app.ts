@@ -62,9 +62,8 @@ const getChangesPerFile = async (payload: WebhookEventMap["pull_request"]) => {
   }
 }
 
-const triggerCoderAgent = () => {
-  // Add trigger key word logic
-  return true;
+const triggerCoderAgent = (body: string) => {
+  return body.toLocaleLowerCase().startsWith("codebot");
 }
 
 const processRawTree = (rawTreeData: any[]) => {
@@ -110,7 +109,7 @@ async function handlePullRequestOpened({octokit, payload}: {octokit: Octokit, pa
 };
 
 const handleIssueOpened = async ({octokit, payload}: {octokit: Octokit, payload: WebhookEventMap["issues"]}) => {
-  if (!triggerCoderAgent()) {
+  if (!triggerCoderAgent(payload.issue.body)) {
     return;
   }
 
@@ -118,7 +117,7 @@ const handleIssueOpened = async ({octokit, payload}: {octokit: Octokit, payload:
     console.log(`GOAL: ${payload.issue.body}`);
     const tree = await getCodeTree({octokit, payload});
     // console.log(tree);
-    const goal = payload.issue.body
+    const goal = payload.issue.body.replace(/codebot/i, '').trim();
     await processTask(goal, tree, octokit, payload);
   } catch (exc) {
     console.log(exc);

@@ -92,7 +92,8 @@ export const getGitFile = async (octokit: Octokit, payload: WebhookEventMap["iss
 
 export const getFileContents = async (octokit: Octokit, payload: WebhookEventMap["issues"], branch: BranchDetails, filepath: string) => {
     const gitFile = await getGitFile(octokit, payload, branch, processGitFilepath(filepath));
-    return addLineNumbers(gitFile.content);
+    const fileWithLines = addLineNumbers(gitFile.content);
+    return { result : fileWithLines, functionString: `open("${filepath}")` }
 }
 
 export const createBranch = async (octokit: Octokit, payload: WebhookEventMap["issues"]) => {
@@ -172,7 +173,7 @@ export const editFileContents = async (octokit: Octokit, payload: WebhookEventMa
         });
 
         console.log(`Edited file: ${filepath}`);
-        return `Edited file: ${filepath}`;
+        return { result: `Successfully edited file: ${filepath}`, functionString: `edit("${filepath}", "${code}", ${lineStart}, ${lineEnd})`}
     } catch (exc) {
         console.log(exc);
     }

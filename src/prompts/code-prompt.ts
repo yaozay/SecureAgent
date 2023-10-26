@@ -16,7 +16,7 @@ DO NOT mention git.
 YOU MUST CALL the taskBreakdown function!
 `;
 
-export const getTaskBreakdownPrompt = (task: string): ChatMessage[] => {
+export const getPlanBreakdownPrompt = (task: string): ChatMessage[] => {
     return [
         {"role": "system", "content": TASK_BREAKDOWN_SYSTEM_PROMPT},
         {"role": "user", "content": `Task: ${task}`}
@@ -43,10 +43,10 @@ export const TASK_LLM_FUNCTION = [
     },
 ]
 
-const CODE_AGENT_SYSTEM_PROMPT = `You are an expert NextJS developer.
+const CODE_AGENT_SYSTEM_PROMPT = `You are an expert developer.
 
 You are an AI agent who will be provided with a goal to accomplish.
-You have access to a NextJS repo.
+You have access to a code repo.
 
 You will output one action at a time to accomplish the provided goal.
 You may also be provided with the file layout in tree format of the project.
@@ -56,16 +56,32 @@ Keep in mind that the edit function OVERWRITES the code already existing on thos
 Consider your code change in the context of the whole file! Your code change should not break the existing code!
 
 
-You are provided with 2 fuctions open and edit, use whichever one will help you accomplish the goal.`;
+You are provided with 3 fuctions done, open, and edit, use whichever one will help you accomplish the goal.
+ONLY RESPOND WITH FUNCTION CALLS.
+YOU MUST CALL DONE ONCE THE GOAL IS COMPLETE.`;
 
-export const getCodeAgentPrompt = (goal: string, repoTree: string): ChatMessage[] => {
+export const getCodeAgentPrompt = (goal: string, repoTree: string, tasks: string[]): ChatMessage[] => {
     return [
         {"role": "system", "content": CODE_AGENT_SYSTEM_PROMPT},
-        {"role": "user", "content": `Goal: ${goal}\nTree: ${repoTree}`}
+        {"role": "user", "content": `Goal:\n${goal}\n\nPlan:\n${tasks.join("\n")}\n\nTree: ${repoTree}`}
     ]
 }
 
 export const LLM_FUNCTIONS = [
+    {
+        "name": "done",
+        "description": "Marks the provided goal as done",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "goal": {
+                    "type": "string",
+                    "description": "The completed goal."
+                }
+            },
+            "required": ["goal"]
+        }
+    },
     {
         "name": "open",
         "description": "Get the contents of the given filepath",
@@ -108,7 +124,13 @@ export const LLM_FUNCTIONS = [
     },
 ]
 
+const markDone = (goal: string) => {
+    console.log(`Marking complete: ${goal}`);
+    return { result: `Marking complete: ${goal}`, functionString: `done("${goal}")`};
+}
+
 export const LLM_FUNCTION_MAP = new Map<string, any>([
     ["open", [getFileContents, ["octokit", "payload", "branch", "filepath"]]],
-    ["edit", [editFileContents, ["octokit", "payload", "branch", "filepath", "code", "lineStart", "lineEnd"]]]
+    ["edit", [editFileContents, ["octokit", "payload", "branch", "filepath", "code", "lineStart", "lineEnd"]]],
+    ["done", [markDone, ["goal"]]]
 ]);
