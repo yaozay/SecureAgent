@@ -73,6 +73,7 @@ const runStep = async (convo: ChatMessage[], actions: any[], actionMap: Map<stri
         const [f, args] = funtionInfo;
         console.log(args);
         
+        let nextStep: string = functionArgs["nextStep"] || null;
         const passingArgs: any[] = [];
         args.forEach((arg: string) => {
             if (arg == "octokit") {
@@ -85,13 +86,6 @@ const runStep = async (convo: ChatMessage[], actions: any[], actionMap: Map<stri
                 passingArgs.push(functionArgs[arg]);
             }
         });
-        // if (actions.length > 0) {
-        //     const pendingAction = [functionName, functionArgs];
-        //     const lastAction = actions[actions.length - 1];
-        //     if (JSON.stringify(pendingAction) === JSON.stringify(lastAction)) {
-        //         throw new Error("Repeating action!");
-        //     }
-        // }
         actions.push([functionName, functionArgs]);
         console.log("CALLING");
         console.log(passingArgs.length);
@@ -100,6 +94,7 @@ const runStep = async (convo: ChatMessage[], actions: any[], actionMap: Map<stri
         return {
             "stepResult": functionResponse,
             "functionName": functionName,
+            "nextStep": nextStep
         }
     }
     //     return functionResponse;
@@ -128,36 +123,29 @@ export const processTask = async (goal: string, tree: string, octokit: Octokit, 
     const actions: any[] = [];
     const actionMap = new Map<string, string[]>([]);
     console.log(convo);
-    const stepLimit = 5;
+    const stepLimit = 10;
     let stepCount = 0;
     while (stepCount < stepLimit) {
         console.log(`ON: ${stepCount + 1}/${stepLimit}`);
         try {
-            const step = await runStep(convo, actions, actionMap, octokit, payload, branch);
+            let step = null;
+            try {
+                step = await runStep(convo, actions, actionMap, octokit, payload, branch);
+            } catch (exc) {
+                console.log(exc);
+                console.log(`Executing single retry!`);
+                step = await runStep(convo, actions, actionMap, octokit, payload, branch);
+            }
             console.log(step);
-            const { stepResult, functionName } = step;
+            const { stepResult, functionName, nextStep } = step;
             const { result, functionString } = stepResult;
             // console.log(stepResult);
-            convo.push({"role": "assistant", "content": functionString});
-            convo.push({"role": "user", "content": result});
+            // convo.push({"role": "assistant", "content": functionString});
+            convo.push({"role": "user", "content": `${result}\n\nNext Step: ${nextStep}`});
             if (functionName == "done") {
                 console.log("GOAL COMPLETED");
                 break;
             }
-            // if (functionName == "edit") {
-            //     console.log("EDIT updating task list.");
-            //     let remTasks = [tasks[tasks.length-1]];
-            //     if (relevantTask < tasks.length) { 
-            //         remTasks = tasks.slice(relevantTask);
-            //     }
-                
-            //     // overwriting tasks
-            //     tasks = remTasks;
-
-            //     convo.push({"role": "user", "content": `Tasks:\n${postprocessTasks(tasks).join("\n")}`})
-
-            //     console.log(`REMAINING TASKS: ${postprocessTasks(tasks).join("\n")}`);
-            // }
         } catch (exc) {
             console.log(exc);
             console.log("EXITING");

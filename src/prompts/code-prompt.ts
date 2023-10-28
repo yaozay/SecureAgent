@@ -51,13 +51,12 @@ You have access to a code repo.
 You will output one action at a time to accomplish the provided goal.
 You may also be provided with the file layout in tree format of the project.
 
-When editing code, ensure you output the full line of code including the whitespace. DO NOT include the line numbers! Make sure the code you write is correct!
-Keep in mind that the edit function OVERWRITES the code already existing on those lines!
+When editing code, ensure you output the full line of code including the whitespace. DO NOT include line numbers! Make sure the code you write is correct!
 Consider your code change in the context of the whole file! Your code change should not break the existing code!
 
 
 You are provided with 3 fuctions done, open, and edit, use whichever one will help you accomplish the goal.
-ONLY RESPOND WITH FUNCTION CALLS.
+ONLY RESPOND WITH FUNCTION CALLS OPEN, EDIT, or DONE.
 YOU MUST CALL DONE ONCE THE GOAL IS COMPLETE.`;
 
 export const getCodeAgentPrompt = (goal: string, repoTree: string, tasks: string[]): ChatMessage[] => {
@@ -91,17 +90,25 @@ export const LLM_FUNCTIONS = [
                 "filepath": {
                     "type": "string",
                     "description": "The filepath to get the contents of."
+                },
+                "nextStep": {
+                    "type": "string",
+                    "description": "The next part of the plan to achieve the goal."
                 }
             },
-            "required": ["filepath"]
+            "required": ["filepath", "nextStep"]
         }
     },
     {
         "name": "edit",
-        "description": "Overwrites the specified lines of the given file with the provided code",
+        "description": "Inserts or overwrites at the specified lines of the given file with the provided code",
         "parameters": {
             "type": "object",
             "properties": {
+                "mode": {
+                    "type": "string",
+                    "description": "Must be 'insert' or 'overwrite'. Determines the editing mode. If 'insert', the specified content will be added at the beginning of the specified starting line without altering the existing code. If 'overwrite', the existing code from the specified starting line will be replaced with the new content."
+                },
                 "filepath": {
                     "type": "string",
                     "description": "The filepath to edit the contents of"
@@ -114,12 +121,12 @@ export const LLM_FUNCTIONS = [
                     "type": "number",
                     "description": "Where the code changes should start"
                 },
-                "lineEnd": {
-                    "type": "number",
-                    "description": "Where the code changes should end"
-                },
+                "nextStep": {
+                    "type": "string",
+                    "description": "The next part of the plan to achieve the goal."
+                }
             },
-            "required": ["filepath", "code", "lineStart", "lineEnd"]
+            "required": ["filepath", "code", "lineStart", "lineEnd", "nextStep"]
         }
     },
 ]
@@ -131,6 +138,6 @@ const markDone = (goal: string) => {
 
 export const LLM_FUNCTION_MAP = new Map<string, any>([
     ["open", [getFileContents, ["octokit", "payload", "branch", "filepath"]]],
-    ["edit", [editFileContents, ["octokit", "payload", "branch", "filepath", "code", "lineStart", "lineEnd"]]],
+    ["edit", [editFileContents, ["octokit", "payload", "branch", "mode", "filepath", "code", "lineStart"]]],
     ["done", [markDone, ["goal"]]]
 ]);
