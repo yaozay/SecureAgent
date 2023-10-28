@@ -51,8 +51,7 @@ You have access to a code repo.
 You will output one action at a time to accomplish the provided goal.
 You may also be provided with the file layout in tree format of the project.
 
-When editing code, ensure you output the full line of code including the whitespace. DO NOT include the line numbers! Make sure the code you write is correct!
-Keep in mind that the edit function OVERWRITES the code already existing on those lines!
+When editing code, ensure you output the full line of code including the whitespace. DO NOT include line numbers! Make sure the code you write is correct!
 Consider your code change in the context of the whole file! Your code change should not break the existing code!
 
 
@@ -102,10 +101,14 @@ export const LLM_FUNCTIONS = [
     },
     {
         "name": "edit",
-        "description": "Overwrites the specified lines of the given file with the provided code",
+        "description": "Inserts or overwrites at the specified lines of the given file with the provided code",
         "parameters": {
             "type": "object",
             "properties": {
+                "mode": {
+                    "type": "string",
+                    "description": "Must be 'insert' or 'overwrite'. Determines the editing mode. If 'insert', the specified content will be added at the beginning of the specified starting line without altering the existing code. If 'overwrite', the existing code from the specified starting line will be replaced with the new content."
+                },
                 "filepath": {
                     "type": "string",
                     "description": "The filepath to edit the contents of"
@@ -135,6 +138,6 @@ const markDone = (goal: string) => {
 
 export const LLM_FUNCTION_MAP = new Map<string, any>([
     ["open", [getFileContents, ["octokit", "payload", "branch", "filepath"]]],
-    ["edit", [editFileContents, ["octokit", "payload", "branch", "filepath", "code", "lineStart"]]],
+    ["edit", [editFileContents, ["octokit", "payload", "branch", "mode", "filepath", "code", "lineStart"]]],
     ["done", [markDone, ["goal"]]]
 ]);

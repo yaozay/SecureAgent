@@ -150,37 +150,34 @@ export const createBranch = async (octokit: Octokit, payload: WebhookEventMap["i
 
 const overwriteFileLines = (contents: string, code: string, lineStart: number) => {
     let lines = contents.split('\n');
-    const codeLines = contents.split('\n').filter((line) => line.length > 0);
-    lines.splice(lineStart <= 0 ? 0 : lineStart - 1, codeLines.length, code);
+    const codeLines = code.split('\n').filter((line) => line.length > 0);
+    lines.splice(lineStart <= 0 ? 0 : lineStart - 1, codeLines.length, ...codeLines);
+    return lines;
 }
 
 const insertFileLines = (contents: string, code: string, lineStart: number) => {
     const lines = contents.split("\n");
     const codeLines = code.split("\n");
     lines.splice(lineStart <= 0 ? 0 : lineStart - 1, 0, ...codeLines);
+    return lines;
 }
 
-export const editFileContents = async (octokit: Octokit, payload: WebhookEventMap["issues"], branch: BranchDetails, filepath: string, code: string, lineStart: number) => {
+export const editFileContents = async (octokit: Octokit, payload: WebhookEventMap["issues"], branch: BranchDetails, mode: string, filepath: string, code: string, lineStart: number) => {
     try {
         let fileContent = await getGitFile(octokit, payload, branch, processGitFilepath(filepath))
         const rawContents = String.raw`${fileContent.content}`;
         const rawCode = String.raw`${code}`;
 
-        // pending!
-        // if (mode == "insert") {
-        //     const updatedContent = insertFileLines(rawContents, rawCode, lineStart);
-        // } else if (mode == "overwrite") {
-        //     const updatedContent = insertFileLines(rawContents, rawCode, lineStart);
-        // } else {
-        //     const err = `Unsupported file edit mode: ${mode}`;
-        //     throw new Error(err);
-        // }
-
-        let lines = rawContents.split('\n');
-        const codeLines = rawCode.split('\n').filter((line) => line.length > 0);
-        lines.splice(lineStart <= 0 ? 0 : lineStart - 1, codeLines.length, code);
-        const updatedContent = lines.join('\n');
-
+        let updatedLines: string[] = [];
+        if (mode == "insert") {
+            updatedLines = insertFileLines(rawContents, rawCode, lineStart);
+        } else if (mode == "overwrite") {
+            updatedLines = overwriteFileLines(rawContents, rawCode, lineStart);
+        } else {
+            const err = `Unsupported file edit mode: ${mode}`;
+            throw new Error(err);
+        }
+        const updatedContent = updatedLines.join('\n');
         const encodedContent = Buffer.from(updatedContent).toString('base64');
 
         // Commit the changes to the branch
