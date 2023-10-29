@@ -1,7 +1,6 @@
 import { AbstractParser, PRFile, PatchInfo } from "../constants";
 import * as diff from 'diff';
 import { JavascriptParser } from "./language/javascript-parser";
-import { skip } from "node:test";
 
 const EXTENSIONS_TO_PARSERS: Map<string, AbstractParser> = new Map([
     ['ts', new JavascriptParser()],
