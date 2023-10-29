@@ -1,8 +1,19 @@
-import { PRFile, PatchInfo } from "../constants";
-import * as parser from '@babel/parser';
-import traverse from "@babel/traverse";
-import { applyPatch, parsePatch } from "diff"
+import { AbstractParser, PRFile, PatchInfo } from "../constants";
 import * as diff from 'diff';
+import { JavascriptParser } from "./language/javascript-parser";
+import { skip } from "node:test";
+
+const EXTENSIONS_TO_PARSERS: Map<string, AbstractParser> = new Map([
+    ['ts', new JavascriptParser()],
+    ['tsx', new JavascriptParser()],
+    ['js', new JavascriptParser()],
+    ['jsx', new JavascriptParser()]
+]);
+
+const getParserForExtension = (filename: string) => {
+    const fileExtension = filename.split('.').pop().toLowerCase();
+    return EXTENSIONS_TO_PARSERS.get(fileExtension) || null;
+}
 
 const expandHunk = (contents: string, hunk: diff.Hunk, linesAbove: number = 5, linesBelow: number = 5) => {
     const fileLines = contents.split("\n");
@@ -69,47 +80,6 @@ export const rawPatchStrategy = (file: PRFile) => {
     return `## ${file.filename}\n\n${file.patch}`;
 }
 
-const escapeString = (str: string) => JSON.parse(JSON.stringify(str));
-
-const findEnclosingFunction = (file: string, lineNumber: number) => {
-    const code: string = escapeString(file);
-    
-    const ast = parser.parse(code, { 
-    sourceType: "module",
-    plugins: ["jsx", "typescript"] // To allow JSX and TypeScript
-    });
-
-    let functionStack: Array<{ context: { startLine: number, endLine: number }, name: string }> = [];
-
-    traverse(ast, {
-    enter(path) {
-        if (path.isFunction()) {
-        const { start, end } = path.node.loc;
-        //   console.log(`${JSON.stringify(start)}, ${JSON.stringify(end)}`)
-        if (start && end && start.line <= lineNumber && lineNumber <= end.line) {
-            console.log("!!!")
-            let functionName = "anonymous function";
-            if (path.node.type === "ArrowFunctionExpression" && path.parent.type === "VariableDeclarator") {
-                if (path.parent.id.type === "Identifier") {
-                    functionName = path.parent.id.name;
-                }
-            } else if (path.node.type === "FunctionDeclaration" || path.node.type === "FunctionExpression") {
-            functionName = path.node.id?.name || "anonymous function";
-            }
-            functionStack.push({
-            context: { 
-                startLine: start.line,
-                endLine: end.line 
-            },
-            name: functionName
-            });
-        }
-        }
-    },
-    });
-    return functionStack.reverse();
-};
-
 const numberLines = (lines: string[], startLine: number) => {
     const numbered = lines.map((line, idx) => {
         return {lineNumber: startLine + idx, line: line}
@@ -117,51 +87,49 @@ const numberLines = (lines: string[], startLine: number) => {
     return numbered;
 }
 
-const injectionPoint = (hunk: diff.Hunk) => {
-    const idx = hunk.lines.findIndex(line => line.startsWith('+') || line.startsWith('-'));
-    return hunk.newStart + idx;
+const trimHunk = (hunk: diff.Hunk): diff.Hunk => {
+    const editLines = hunk.lines.filter((line) => line.startsWith("+") || line.startsWith("-"));
+    const newStart = hunk.lines.findIndex((line) => line.startsWith("+") || line.startsWith("-"));
+    return {...hunk, lines: editLines, newStart: newStart + hunk.newStart};
 }
 
-const functionalContextPerHunk = (currentFile: string, hunk: diff.Hunk) => {
-    // const patches = getChangedLinesFromPatch(parsePatch(patch));
+const getSkipLines = (hunk: diff.Hunk, patchLines: string[]) => {
+    const linesToSkip: number[] = [];
+    const start = hunk.newStart - 1;
+    patchLines.forEach((line, idx) => {
+        if (line.startsWith("+")) {
+            linesToSkip.push(start + idx);
+        }
+    });
+    return linesToSkip;
+}
+
+const functionalContextPerHunk = (currentFile: string, hunk: diff.Hunk, parser: AbstractParser) => {
+    const trimmedHunk = trimHunk(hunk);
     const res: string[] = [];
-    const ast = parser.parse(currentFile, {
-        sourceType: 'module',
-        plugins: ['jsx', 'typescript'], // To allow JSX and TypeScript
-    });
-    let largestEnclosingFunction: any = null;
-    let largestSize = 0;
     const insertions = hunk.lines.filter((line) => line.startsWith("+")).length;
-    const lineStart = hunk.newStart;
+    const lineStart = trimmedHunk.newStart;
     const lineEnd = lineStart + insertions;
-    traverse(ast, {
-        Function(path) {
-            const { start, end } = path.node.loc;
-            if (start.line <= lineStart && lineEnd <= end.line) {
-                const size = end.line - start.line;
-                if (size > largestSize) {
-                    largestSize = size;
-                    largestEnclosingFunction = path.node;
-                }
-            }
-        },
-    });
+    const largestEnclosingFunction: any = parser.findEnclosingFunction(currentFile, lineStart, lineEnd).enclosingFunction;
     if (largestEnclosingFunction) {
         const functionStartLine = largestEnclosingFunction.loc.start.line;
         const functionEndLine = largestEnclosingFunction.loc.end.line;
         const updatedFileLines = currentFile.split('\n');
         const functionContext = updatedFileLines.slice(functionStartLine - 1, functionEndLine);
-        const injectionIdx = injectionPoint(hunk);
+        const injectionIdx = trimmedHunk.newStart - 1;
         const numberedFunctionLines = numberLines(functionContext, functionStartLine - 1);
         const editLines = hunk.lines.filter(line => line.startsWith("-") || line.startsWith("+"));
         const holder: string[] = [];
         const hunkHeader = `@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`;
+        const skipLines = getSkipLines(trimmedHunk, editLines);
         holder.push(hunkHeader);
         numberedFunctionLines.forEach((numberedLine) => {
-            if (numberedLine.lineNumber == injectionIdx+1) {
+            if (numberedLine.lineNumber == injectionIdx) {
                 holder.push(...editLines);
             }
-            holder.push(numberedLine.line);
+            if (!skipLines.includes(numberedLine.lineNumber)) {
+                holder.push(numberedLine.line);
+            }
         });
         const injected = holder.join("\n");
         res.push(injected);
@@ -171,7 +139,7 @@ const functionalContextPerHunk = (currentFile: string, hunk: diff.Hunk) => {
     }
 }
 
-const diffContextPerHunk = (file: PRFile) => {
+const diffContextPerHunk = (file: PRFile, parser: AbstractParser) => {
     const updatedFile = diff.applyPatch(file.old_contents, file.patch);
     const patches = diff.parsePatch(file.patch);
     if (!updatedFile) {
@@ -191,7 +159,7 @@ const diffContextPerHunk = (file: PRFile) => {
             let context: string = null;
             try {
                 // should only for ts, tsx, js, jsx files rn
-                context = functionalContextPerHunk(updatedFile, hunk).join("\n")
+                context = functionalContextPerHunk(updatedFile, hunk, parser).join("\n")
                 console.log("!!!!!!!!!! WORKED !!!!!!!!!!!!!!")
                 console.log(context);
             } catch (exc) {
@@ -206,9 +174,9 @@ const diffContextPerHunk = (file: PRFile) => {
     }
 }
 
-const functionContextPatchStrategy = (file: PRFile) => {
+const functionContextPatchStrategy = (file: PRFile, parser: AbstractParser) => {
     console.log("USING DIFF FUNCTION CONTEXT STRATEGY");
-    const contextChunks = diffContextPerHunk(file);
+    const contextChunks = diffContextPerHunk(file, parser);
     let res = null;
     try {
         res = `## ${file.filename}\n\n${contextChunks.join("\n\n")}`;
@@ -219,10 +187,9 @@ const functionContextPatchStrategy = (file: PRFile) => {
 }
 
 export const smarterContextPatchStrategy = (file: PRFile) => {
-    const fileExtension = file.filename.split('.').pop().toLowerCase();
-    const extensionsSupportingFunctionalContext = ['ts', 'tsx', 'js', 'jsx'];
-    if (extensionsSupportingFunctionalContext.includes(fileExtension)) {
-        return functionContextPatchStrategy(file);
+    const parser: AbstractParser = getParserForExtension(file.filename);
+    if (parser != null) {
+        return functionContextPatchStrategy(file, parser);
     } else {
         return expandedPatchStrategy(file);
     }

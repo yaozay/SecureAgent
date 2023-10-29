@@ -60,3 +60,11 @@ export const processGitFilepath = (filepath: string) => {
     // Remove the leading '/' if it exists
     return filepath.startsWith('/') ? filepath.slice(1) : filepath;
 }
+
+export interface EnclosingContext {
+    enclosingFunction: any
+}
+
+export interface AbstractParser {
+    findEnclosingFunction(file: string, lineStart: number, lineEnd: number): EnclosingContext;
+}
