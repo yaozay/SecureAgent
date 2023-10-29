@@ -240,6 +240,7 @@ const preprocessFile = async (octokit: Octokit, payload: WebhookEventMap["pull_r
     // Handle scenario where file does not exist!!
     const contents = await getGitFile(octokit, payload, branch, file.filename);
     if (contents.content == null) {
+        console.log(`New File: ${file.filename}`)
         file.old_contents = null
     } else {
         file.old_contents = String.raw`${contents.content}`;
