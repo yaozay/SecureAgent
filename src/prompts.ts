@@ -1,6 +1,6 @@
-import { encode, isWithinTokenLimit, encodeChat } from 'gpt-tokenizer';
-import { BranchDetails, ChatMessage, CodeSuggestion, LLModel, PRFile } from './constants';
-import { expandedPatchStrategy, smarterContextPatchStrategy, rawPatchStrategy } from './context/review';
+import { encode, encodeChat } from 'gpt-tokenizer';
+import { ChatMessage, CodeSuggestion, LLModel, PRFile } from './constants';
+import { smarterContextPatchStrategy, rawPatchStrategy } from './context/review';
 
 const ModelsToTokenLimits = new Map<string, number>([
   ["gpt-3.5-turbo", 4096],

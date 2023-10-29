@@ -24,8 +24,7 @@ export interface PatchInfo {
       newLines: number,
       lines: string[]
     }[]
-  }
-  
+}
 
 export interface CodeSuggestion {
     file: string;

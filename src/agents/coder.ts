@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import { BranchDetails, ChatMessage, sleep } from '../constants';
-import { LLM_FUNCTIONS, LLM_FUNCTION_MAP, TASK_LLM_FUNCTION, getCodeAgentPrompt, getTaskBreakdownPrompt } from '../prompts/code-prompt';
+import { LLM_FUNCTIONS, LLM_FUNCTION_MAP, TASK_LLM_FUNCTION, getCodeAgentPrompt, getPlanBreakdownPrompt } from '../prompts/code-prompt';
 import { Octokit } from "@octokit/rest";
 import { WebhookEventMap } from "@octokit/webhooks-definitions/schema";
 import { createBranch } from '../reviews';
@@ -24,8 +24,8 @@ const postprocessTasks = (tasks: string[]) => {
     return tasks.map((task, idx) => `${idx+1}. ${task}`);
 }
 
-const generateTaskList = async (goal: string) => {
-    const convo = getTaskBreakdownPrompt(goal);
+const generatePlan = async (goal: string) => {
+    const convo = getPlanBreakdownPrompt(goal);
     const response = await chatFunctions(convo, TASK_LLM_FUNCTION);
     const responseMessage = response.choices[0].message;
     console.log(responseMessage);
@@ -36,7 +36,19 @@ const generateTaskList = async (goal: string) => {
     return subtasks;
 }
 
-const runStep = async (convo: ChatMessage[], actions: any[], octokit: Octokit, payload: WebhookEventMap["issues"], branch: BranchDetails) => {
+const canTakeAction = (actionMap: Map<string, string[]>, proposedAction: string, filepath: string) => {
+    if (proposedAction == "edit") {
+        const filesOpened = actionMap.get("open") || [];
+        if (filesOpened.includes(filepath)) { // must have opened file before editing (stops blind edits)
+            return true;
+        }
+        return false;
+    }
+    return true;
+
+}
+
+const runStep = async (convo: ChatMessage[], actions: any[], actionMap: Map<string, string[]>, octokit: Octokit, payload: WebhookEventMap["issues"], branch: BranchDetails) => {
     const response = await chatFunctions(convo, LLM_FUNCTIONS);
     const responseMessage = response.choices[0].message;
     console.log("GPT RESPONSE:")
@@ -44,14 +56,25 @@ const runStep = async (convo: ChatMessage[], actions: any[], octokit: Octokit, p
     // Step 2: check if GPT wanted to call a function
 
     if (responseMessage.function_call) {
-        const functionName = responseMessage.function_call.name;
+        let functionName = responseMessage.function_call.name;
+        const functionArgs = JSON.parse(responseMessage.function_call.arguments);
+
+        if (functionName == "edit" || functionName == "open") {
+            if (!canTakeAction(actionMap, functionName, functionArgs["filepath"])) {
+                console.log("FORCING OPEN FIRST");
+                functionName = "open";
+            }
+            let files = actionMap.get(functionName) || [];
+            files.push(functionArgs["filepath"]);
+            actionMap.set(functionName, files);
+        }
+
         const funtionInfo = LLM_FUNCTION_MAP.get(functionName);
         const [f, args] = funtionInfo;
         console.log(args);
-        const functionArgs = JSON.parse(responseMessage.function_call.arguments);
         
+        let nextStep: string = functionArgs["nextStep"] || null;
         const passingArgs: any[] = [];
-        let relevantTask: number = null;
         args.forEach((arg: string) => {
             if (arg == "octokit") {
                 passingArgs.push(octokit);
@@ -59,19 +82,10 @@ const runStep = async (convo: ChatMessage[], actions: any[], octokit: Octokit, p
                 passingArgs.push(payload);
             } else if (arg == "branch") {
                 passingArgs.push(branch);
-            } else if (arg == "taskNumber") { 
-                relevantTask = functionArgs["taskNumber"];
             } else {
                 passingArgs.push(functionArgs[arg]);
             }
         });
-        // if (actions.length > 0) {
-        //     const pendingAction = [functionName, functionArgs];
-        //     const lastAction = actions[actions.length - 1];
-        //     if (JSON.stringify(pendingAction) === JSON.stringify(lastAction)) {
-        //         throw new Error("Repeating action!");
-        //     }
-        // }
         actions.push([functionName, functionArgs]);
         console.log("CALLING");
         console.log(passingArgs.length);
@@ -79,8 +93,8 @@ const runStep = async (convo: ChatMessage[], actions: any[], octokit: Octokit, p
         console.log("CALLED");
         return {
             "stepResult": functionResponse,
-            "relevantTask": relevantTask,
-            "functionName": functionName
+            "functionName": functionName,
+            "nextStep": nextStep
         }
     }
     //     return functionResponse;
@@ -103,36 +117,35 @@ const runStep = async (convo: ChatMessage[], actions: any[], octokit: Octokit, p
 export const processTask = async (goal: string, tree: string, octokit: Octokit, payload: WebhookEventMap["issues"]) => {
     const branch = await createBranch(octokit, payload);
 
-    // let tasks = await generateTaskList(goal);
+    let tasks = await generatePlan(goal);
 
-    // const convo = getCodeAgentPrompt(goal, postprocessTasks(tasks).join("\n"), tree);
-    const convo = getCodeAgentPrompt(goal, tree);
+    const convo = getCodeAgentPrompt(goal, tree, tasks);
     const actions: any[] = [];
+    const actionMap = new Map<string, string[]>([]);
     console.log(convo);
-    const stepLimit = 5;
+    const stepLimit = 10;
     let stepCount = 0;
     while (stepCount < stepLimit) {
         console.log(`ON: ${stepCount + 1}/${stepLimit}`);
         try {
-            const step = await runStep(convo, actions, octokit, payload, branch);
+            let step = null;
+            try {
+                step = await runStep(convo, actions, actionMap, octokit, payload, branch);
+            } catch (exc) {
+                console.log(exc);
+                console.log(`Executing single retry!`);
+                step = await runStep(convo, actions, actionMap, octokit, payload, branch);
+            }
             console.log(step);
-            const { stepResult, relevantTask, functionName } = step;
+            const { stepResult, functionName, nextStep } = step;
+            const { result, functionString } = stepResult;
             // console.log(stepResult);
-            convo.push({"role": "user", "content": stepResult});
-            // if (functionName == "edit") {
-            //     console.log("EDIT updating task list.");
-            //     let remTasks = [tasks[tasks.length-1]];
-            //     if (relevantTask < tasks.length) { 
-            //         remTasks = tasks.slice(relevantTask);
-            //     }
-                
-            //     // overwriting tasks
-            //     tasks = remTasks;
-
-            //     convo.push({"role": "user", "content": `Tasks:\n${postprocessTasks(tasks).join("\n")}`})
-
-            //     console.log(`REMAINING TASKS: ${postprocessTasks(tasks).join("\n")}`);
-            // }
+            // convo.push({"role": "assistant", "content": functionString});
+            convo.push({"role": "user", "content": `${result}\n\nNext Step: ${nextStep}`});
+            if (functionName == "done") {
+                console.log("GOAL COMPLETED");
+                break;
+            }
         } catch (exc) {
             console.log(exc);
             console.log("EXITING");

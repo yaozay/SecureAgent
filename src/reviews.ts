@@ -92,7 +92,8 @@ export const getGitFile = async (octokit: Octokit, payload: WebhookEventMap["iss
 
 export const getFileContents = async (octokit: Octokit, payload: WebhookEventMap["issues"], branch: BranchDetails, filepath: string) => {
     const gitFile = await getGitFile(octokit, payload, branch, processGitFilepath(filepath));
-    return addLineNumbers(gitFile.content);
+    const fileWithLines = `# ${filepath}\n${addLineNumbers(gitFile.content)}`
+    return { result : fileWithLines, functionString: `Opening file: ${filepath}` }
 }
 
 export const createBranch = async (octokit: Octokit, payload: WebhookEventMap["issues"]) => {
@@ -147,17 +148,36 @@ export const createBranch = async (octokit: Octokit, payload: WebhookEventMap["i
     return branchDetails;
 }
 
-export const editFileContents = async (octokit: Octokit, payload: WebhookEventMap["issues"], branch: BranchDetails, filepath: string, code: string, lineStart: number, lineEnd: number) => {
+const overwriteFileLines = (contents: string, code: string, lineStart: number) => {
+    let lines = contents.split('\n');
+    const codeLines = code.split('\n').filter((line) => line.length > 0);
+    lines.splice(lineStart <= 0 ? 0 : lineStart - 1, codeLines.length, ...codeLines);
+    return lines;
+}
+
+const insertFileLines = (contents: string, code: string, lineStart: number) => {
+    const lines = contents.split("\n");
+    const codeLines = code.split("\n");
+    lines.splice(lineStart <= 0 ? 0 : lineStart - 1, 0, ...codeLines);
+    return lines;
+}
+
+export const editFileContents = async (octokit: Octokit, payload: WebhookEventMap["issues"], branch: BranchDetails, mode: string, filepath: string, code: string, lineStart: number) => {
     try {
         let fileContent = await getGitFile(octokit, payload, branch, processGitFilepath(filepath))
         const rawContents = String.raw`${fileContent.content}`;
         const rawCode = String.raw`${code}`;
 
-        let lines = rawContents.split('\n');
-        const codeLines = rawCode.split('\n').filter((line) => line.length > 0);
-        lines.splice(lineStart <= 0 ? 0 : lineStart - 1, codeLines.length, code);
-        const updatedContent = lines.join('\n');
-
+        let updatedLines: string[] = [];
+        if (mode == "insert") {
+            updatedLines = insertFileLines(rawContents, rawCode, lineStart);
+        } else if (mode == "overwrite") {
+            updatedLines = overwriteFileLines(rawContents, rawCode, lineStart);
+        } else {
+            const err = `Unsupported file edit mode: ${mode}`;
+            throw new Error(err);
+        }
+        const updatedContent = updatedLines.join('\n');
         const encodedContent = Buffer.from(updatedContent).toString('base64');
 
         // Commit the changes to the branch
@@ -172,7 +192,7 @@ export const editFileContents = async (octokit: Octokit, payload: WebhookEventMa
         });
 
         console.log(`Edited file: ${filepath}`);
-        return `Edited file: ${filepath}`;
+        return { result: `Successfully edited file: ${filepath}`, functionString: `Editing file: ${filepath} with ${code}`}
     } catch (exc) {
         console.log(exc);
     }
