@@ -88,23 +88,61 @@ const numberLines = (lines: string[], startLine: number) => {
 }
 
 const trimHunk = (hunk: diff.Hunk): diff.Hunk => {
-    const editLines = hunk.lines.filter((line) => line.startsWith("+") || line.startsWith("-"));
-    const newStart = hunk.lines.findIndex((line) => line.startsWith("+") || line.startsWith("-"));
-    return {...hunk, lines: editLines, newStart: newStart + hunk.newStart};
+    const startIdx = hunk.lines.findIndex((line) => line.startsWith("+") || line.startsWith("-"));
+    const endIdx = hunk.lines.slice().reverse().findIndex((line) => line.startsWith("+") || line.startsWith("-"));
+    const editLines = hunk.lines.slice(startIdx, hunk.lines.length - endIdx);
+    return {...hunk, lines: editLines, newStart: startIdx + hunk.newStart};
 }
 
 const getSkipLines = (hunk: diff.Hunk, patchLines: string[]) => {
     const linesToSkip: number[] = [];
     const start = hunk.newStart - 1;
-    patchLines.forEach((line, idx) => {
-        if (line.startsWith("+")) {
-            linesToSkip.push(start + idx);
+    let ln = 0;
+    patchLines.forEach((line) => {
+        if (!line.startsWith("-")) {
+            linesToSkip.push(start + ln);
+            ln += 1
         }
     });
     return linesToSkip;
 }
 
 const functionalContextPerHunk = (currentFile: string, hunk: diff.Hunk, parser: AbstractParser) => {
+    const trimmedHunk = trimHunk(hunk);
+    const res: string[] = [];
+    // Count the number of insertions in the hunk
+    const insertions = trimmedHunk.lines.filter((line) => !line.startsWith("-")).length;
+    // Calculate the start and end lines of the changes in the hunk
+    const lineStart = trimmedHunk.newStart;
+    const lineEnd = lineStart + insertions;
+    const largestEnclosingFunction: any = parser.findEnclosingFunction(currentFile, lineStart, lineEnd).enclosingFunction;
+    if (largestEnclosingFunction) {
+        const functionStartLine = largestEnclosingFunction.loc.start.line;
+        const functionEndLine = largestEnclosingFunction.loc.end.line;
+        const updatedFileLines = currentFile.split('\n');
+        // Extract the lines of the function
+        const functionContext = updatedFileLines.slice(functionStartLine - 1, functionEndLine);
+
+        // Calculate the index where the changes should be injected into the function
+        const injectionIdx = (hunk.newStart - functionStartLine) + hunk.lines.findIndex((line) => line.startsWith("+") || line.startsWith("-"));
+        // Count the number of lines that should be dropped from the function
+        const dropCount = trimmedHunk.lines.filter(line => !line.startsWith("-")).length;
+
+
+        const hunkHeader = `@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`;
+        // Inject the changes into the function, dropping the necessary lines
+        functionContext.splice(injectionIdx, dropCount, ...trimmedHunk.lines);
+
+        res.push(functionContext.join("\n"));
+        res.unshift(hunkHeader);
+        return res;
+    } else {
+        // If no enclosing function was found, throw an error
+        throw new Error("An enclosing function could not be found.");
+    }
+}
+
+const functionalContextPerHunkBackup = (currentFile: string, hunk: diff.Hunk, parser: AbstractParser) => {
     const trimmedHunk = trimHunk(hunk);
     const res: string[] = [];
     const insertions = hunk.lines.filter((line) => line.startsWith("+")).length;
@@ -118,10 +156,14 @@ const functionalContextPerHunk = (currentFile: string, hunk: diff.Hunk, parser: 
         const functionContext = updatedFileLines.slice(functionStartLine - 1, functionEndLine);
         const injectionIdx = trimmedHunk.newStart - 1;
         const numberedFunctionLines = numberLines(functionContext, functionStartLine - 1);
-        const editLines = hunk.lines.filter(line => line.startsWith("-") || line.startsWith("+"));
+
+        // exp
+        // exp
+
+        const editLines = trimmedHunk.lines;
         const holder: string[] = [];
-        const hunkHeader = `@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`;
         const skipLines = getSkipLines(trimmedHunk, editLines);
+        const hunkHeader = `@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`;
         holder.push(hunkHeader);
         numberedFunctionLines.forEach((numberedLine) => {
             if (numberedLine.lineNumber == injectionIdx) {
