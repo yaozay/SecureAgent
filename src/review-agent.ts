@@ -5,6 +5,8 @@ import { PullRequestEvent, WebhookEventMap } from '@octokit/webhooks-definitions
 import { axiom } from './logger';
 import { Octokit } from '@octokit/rest';
 import { getGitFile } from './reviews';
+import { AutoblocksTracer } from '@autoblocks/client';
+import * as crypto from 'crypto';
 
 interface PRLogEvent {
     id: number;
@@ -23,17 +25,44 @@ export const logPRInfo = (pullRequest: PullRequestEvent) => {
 }
 
 export const reviewDiff = async (convo: ChatMessage[], model: LLModel = "gpt-3.5-turbo") => {
+    const tracer = new AutoblocksTracer(process.env.AUTOBLOCKS_INGESTION_KEY, {
+        traceId: crypto.randomUUID(),
+        properties: {
+            provider: 'openai',
+        },
+    });
     const openai = new OpenAI({
         apiKey: process.env.OPENAI_API_KEY,
     });
-    console.log(convo);
-    const chatCompletion = await openai.chat.completions.create({
-        //@ts-ignore
+
+    const requestParams = {  
         messages: convo,
         model: model,
         temperature: 0
+    };
+    await tracer.sendEvent('review-agent.request', {
+        properties: requestParams,
     });
-    return chatCompletion.choices[0].message.content;
+    console.log(convo);
+    try {
+        //@ts-ignore
+        const chatCompletion = await openai.chat.completions.create(requestParams);
+        await tracer.sendEvent('review-agent.response', {
+            properties: {
+                response: chatCompletion
+            },
+        });
+        return chatCompletion.choices[0].message.content;
+    } catch (exc) {
+        console.log(exc);
+        await tracer.sendEvent('review-agent.error', {
+            properties: {
+                exc,
+            },
+        });
+        throw new Error("Error getting LLM response")
+    }
+    
 }
 
 export const reviewFiles = async (files: PRFile[], model: LLModel, patchBuilder: (file: PRFile) => string, convoBuilder: (diff: string) => ChatMessage[]) => {

@@ -4,29 +4,55 @@ import { LLM_FUNCTIONS, LLM_FUNCTION_MAP, TASK_LLM_FUNCTION, getCodeAgentPrompt,
 import { Octokit } from "@octokit/rest";
 import { WebhookEventMap } from "@octokit/webhooks-definitions/schema";
 import { createBranch } from '../reviews';
+import { AutoblocksTracer } from '@autoblocks/client';
+import * as crypto from 'crypto';
 
-const chatFunctions = async (convo: ChatMessage[], funcs: any) => {
+const chatFunctions = async (sessionId: string, convo: ChatMessage[], funcs: any) => {
+    const tracer = new AutoblocksTracer(process.env.AUTOBLOCKS_INGESTION_KEY, {
+        traceId: sessionId,
+        properties: {
+            provider: 'openai',
+        },
+    });
     const openai = new OpenAI({
         apiKey: process.env.OPENAI_API_KEY,
     });
-
-    const response = await openai.chat.completions.create({
+    const requestParams = {
         model: "gpt-4-0613",
-        //@ts-ignore
         messages: convo,
         functions: funcs,
         function_call: "auto"
+    };
+    await tracer.sendEvent('code-agent.request', {
+        properties: requestParams,
     });
-    return response;
+    try {
+        //@ts-ignore
+        const response = await openai.chat.completions.create(requestParams);
+        await tracer.sendEvent('code-agent.response', {
+            properties: {
+                response
+            },
+        });
+        return response;
+    } catch (exc) {
+        console.log(exc);
+        await tracer.sendEvent('code-agent.error', {
+            properties: {
+                exc,
+            },
+        });
+        throw new Error("Error getting LLM Response");
+    }
 }
 
 const postprocessTasks = (tasks: string[]) => {
     return tasks.map((task, idx) => `${idx+1}. ${task}`);
 }
 
-const generatePlan = async (goal: string) => {
+const generatePlan = async (sessionId: string, goal: string) => {
     const convo = getPlanBreakdownPrompt(goal);
-    const response = await chatFunctions(convo, TASK_LLM_FUNCTION);
+    const response = await chatFunctions(sessionId, convo, TASK_LLM_FUNCTION);
     const responseMessage = response.choices[0].message;
     console.log(responseMessage);
     if (!responseMessage.function_call) {
@@ -48,8 +74,8 @@ const canTakeAction = (actionMap: Map<string, string[]>, proposedAction: string,
 
 }
 
-const runStep = async (convo: ChatMessage[], actions: any[], actionMap: Map<string, string[]>, octokit: Octokit, payload: WebhookEventMap["issues"], branch: BranchDetails) => {
-    const response = await chatFunctions(convo, LLM_FUNCTIONS);
+const runStep = async (sessionId: string, convo: ChatMessage[], actions: any[], actionMap: Map<string, string[]>, octokit: Octokit, payload: WebhookEventMap["issues"], branch: BranchDetails) => {
+    const response = await chatFunctions(sessionId, convo, LLM_FUNCTIONS);
     const responseMessage = response.choices[0].message;
     console.log("GPT RESPONSE:")
     console.log(responseMessage);
@@ -115,9 +141,10 @@ const runStep = async (convo: ChatMessage[], actions: any[], actionMap: Map<stri
 }
 
 export const processTask = async (goal: string, tree: string, octokit: Octokit, payload: WebhookEventMap["issues"]) => {
+    const sessionId = crypto.randomUUID();
     const branch = await createBranch(octokit, payload);
 
-    let tasks = await generatePlan(goal);
+    let tasks = await generatePlan(sessionId, goal);
 
     const convo = getCodeAgentPrompt(goal, tree, tasks);
     const actions: any[] = [];
@@ -130,17 +157,17 @@ export const processTask = async (goal: string, tree: string, octokit: Octokit, 
         try {
             let step = null;
             try {
-                step = await runStep(convo, actions, actionMap, octokit, payload, branch);
+                step = await runStep(sessionId, convo, actions, actionMap, octokit, payload, branch);
             } catch (exc) {
                 console.log(exc);
                 console.log(`Executing single retry!`);
-                step = await runStep(convo, actions, actionMap, octokit, payload, branch);
+                step = await runStep(sessionId, convo, actions, actionMap, octokit, payload, branch);
             }
             console.log(step);
             const { stepResult, functionName, nextStep } = step;
             const { result, functionString } = stepResult;
             // console.log(stepResult);
-            // convo.push({"role": "assistant", "content": functionString});
+            convo.push({"role": "assistant", "content": functionString});
             convo.push({"role": "user", "content": `${result}\n\nNext Step: ${nextStep}`});
             if (functionName == "done") {
                 console.log("GOAL COMPLETED");

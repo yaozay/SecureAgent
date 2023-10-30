@@ -42,6 +42,13 @@ Convert code suggestions into a proper function call
 
 CODE BOT
 
+Explicit file create functionality
+
+Needs to comment done on original issue when exiting loop
+JSON exception common
+
+Doesn't always call fns (needs to stay within schema better)
+
 break original goal into tasks
 - accomplish list of tasks
 Determine when goal is achieved
