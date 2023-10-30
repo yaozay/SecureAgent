@@ -34,6 +34,9 @@ const chatFunctions = async (sessionId: string, convo: ChatMessage[], funcs: any
                 response
             },
         });
+        if (!response.choices[0].message.function_call) {
+            throw new Error(JSON.stringify(response));
+        }
         return response;
     } catch (exc) {
         console.log(exc);
