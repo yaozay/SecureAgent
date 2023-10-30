@@ -16,7 +16,6 @@ in memory context cache
 
 get the function for the hunk and use that as general context
 get general scope:
-- interfaces
 - classes
 - ignore new lines
 - hunks spanning multiple scopes
@@ -76,10 +75,6 @@ Generalize to multiple repo types
 
 Follow up with everyone on twitter + email
 reach out to 10 potential users
-
-TODO 10/22
-- logging
-- replay logging
 
 DEBUG
 - why did robert's pr get bad feedback?

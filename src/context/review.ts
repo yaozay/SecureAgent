@@ -204,6 +204,7 @@ const diffContextPerHunk = (file: PRFile, parser: AbstractParser) => {
                 console.log("!!!!!!!!!! WORKED !!!!!!!!!!!!!!")
                 console.log(context);
             } catch (exc) {
+                console.log(exc);
                 console.log("!!!!!!!! FALLING BACK !!!!!!!!!")
                 context = expandHunk(file.old_contents, hunk);
             }

@@ -2,7 +2,6 @@ import { AbstractParser, EnclosingContext } from "../../constants";
 import * as parser from '@babel/parser';
 import traverse from "@babel/traverse";
 
-
 export class JavascriptParser implements AbstractParser {
     findEnclosingFunction(file: string, lineStart: number, lineEnd: number): EnclosingContext {
         const ast = parser.parse(file, {
@@ -22,6 +21,17 @@ export class JavascriptParser implements AbstractParser {
                     }
                 }
             },
+            TSInterfaceDeclaration(path) {
+                console.log("IN INTERFACE PROCESS")
+                const { start, end } = path.node.loc;
+                if (start.line <= lineStart && lineEnd <= end.line) {
+                    const size = end.line - start.line;
+                    if (size > largestSize) {
+                        largestSize = size;
+                        largestEnclosingFunction = path.node;
+                    }
+                }
+            }
         });
         return {
             enclosingFunction: largestEnclosingFunction
