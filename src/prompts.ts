@@ -1,6 +1,6 @@
-import { encode, isWithinTokenLimit, encodeChat } from 'gpt-tokenizer';
-import { BranchDetails, ChatMessage, CodeSuggestion, LLModel, PRFile, PatchInfo } from './constants';
-import * as diff from 'diff';
+import { encode, encodeChat } from 'gpt-tokenizer';
+import { ChatMessage, CodeSuggestion, LLModel, PRFile } from './constants';
+import { smarterContextPatchStrategy, rawPatchStrategy } from './context/review';
 
 const ModelsToTokenLimits = new Map<string, number>([
   ["gpt-3.5-turbo", 4096],
@@ -144,53 +144,12 @@ export const buildSuggestionPrompt = (file: PRFile) => {
   return `## ${file.filename}\n\n${patchWithLines}`;
 }
 
-const expandFileLines = (file: PRFile, linesAbove: number = 5, linesBelow: number = 5) => {
-  const fileLines = file.old_contents.split("\n");
-  const patches: PatchInfo[] = diff.parsePatch(file.patch);
-  const expandedLines: string[][] = [];
-  patches.forEach(patch => {
-    patch.hunks.forEach(hunk => {
-      const curExpansion: string[] = [];
-      const start = Math.max(0, hunk.oldStart - 1 - linesAbove);
-      const end = Math.min(fileLines.length, hunk.oldStart - 1 + hunk.oldLines + linesBelow);
-
-      for (let i = start; i < hunk.oldStart - 1; i++) {
-          curExpansion.push(fileLines[i]);
-      }
-
-      curExpansion.push(`@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`);
-      hunk.lines.forEach(line => {
-          if (!curExpansion.includes(line)) {
-            curExpansion.push(line);
-          }
-        });
-
-      for (let i = hunk.oldStart - 1 + hunk.oldLines; i < end; i++) {
-          curExpansion.push(fileLines[i]);
-      }
-      expandedLines.push(curExpansion);
-    });
-  });
-
-  return expandedLines;
-};
-
-const expandedPatchStrategy = (file: PRFile) => {
-  const expandedPatches = expandFileLines(file);
-  const expansions = expandedPatches.map((patchLines) => patchLines.join("\n")).join("\n\n")
-  return `## ${file.filename}\n\n${expansions}`;
-}
-
-const rawPatchStrategy = (file: PRFile) => {
-  return `## ${file.filename}\n\n${file.patch}`;
-}
-
 
 export const buildPatchPrompt = (file: PRFile) => {
   if (file.old_contents == null) {
     return rawPatchStrategy(file);
   } else {
-    return expandedPatchStrategy(file);
+    return smarterContextPatchStrategy(file);
   }
 }
 

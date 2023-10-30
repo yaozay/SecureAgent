@@ -12,8 +12,22 @@ Inline Comments in the pr - PENDING
 - files with multiple chunk headers
 log files that are too large.
 
-minimum:
+in memory context cache
+
 get the function for the hunk and use that as general context
+get general scope:
+- interfaces
+- classes
+- ignore new lines
+- hunks spanning multiple scopes
+- handle globabl scope
+- changes in far enough apart within a single function will result in multiple hunks... Merge overlapping function contexts
+
+more parsers (popularity):
+- py
+- java
+- c#
+- c, c++
 
 better:
 potentially build a call chain for functions in changes
@@ -36,6 +50,10 @@ Need to be able to self determine when task is done, should not be limited to 5 
 
 move to next step after editing a file
 
+MUST OPEN FILE BEFORE EDIT can be called on the file!
+Breakdown each edit into steps before executing edit.
+Embed and query goal against repo embeddings to get inital set of relevant files... Maybe preload context?
+
 the edit function should insert NOT overwrite (this causes too many issues).
 Does not take into account full context of the files, need to figure this out
 
@@ -53,8 +71,6 @@ Follow up with everyone on twitter + email
 reach out to 10 potential users
 
 TODO 10/22
-- function context for js (py?)
-- better agents
 - logging
 - replay logging
 

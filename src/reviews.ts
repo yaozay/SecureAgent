@@ -82,10 +82,10 @@ export const getGitFile = async (octokit: Octokit, payload: WebhookEventMap["iss
         //@ts-ignore
         return {"content": decodedContent, "sha": response.data.sha};
     } catch (exc) {
-        console.log(exc);
         if (exc.status === 404) {
             return {"content": null, "sha": null};
         }
+        console.log(exc);
         throw exc;
     }
 }
