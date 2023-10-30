@@ -12,6 +12,8 @@ Inline Comments in the pr - PENDING
 - files with multiple chunk headers
 log files that are too large.
 
+in memory context cache
+
 get the function for the hunk and use that as general context
 get general scope:
 - interfaces
