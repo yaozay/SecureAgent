@@ -96,6 +96,16 @@ export const getFileContents = async (octokit: Octokit, payload: WebhookEventMap
     return { result : fileWithLines, functionString: `Opening file: ${filepath}` }
 }
 
+export const commentIssue = async (octokit: Octokit, payload: WebhookEventMap["issues"], comment: string) => {
+    await octokit.rest.issues.createComment({
+        owner: payload.repository.owner.login,
+        repo: payload.repository.name,
+        issue_number: payload.issue.number,
+        body: comment
+    });
+}
+
+
 export const createBranch = async (octokit: Octokit, payload: WebhookEventMap["issues"]) => {
     let branchDetails = null;
     try {
@@ -133,13 +143,8 @@ export const createBranch = async (octokit: Octokit, payload: WebhookEventMap["i
             url: newBranch.url
         };
         let branchUrl = `https://github.com/${payload.repository.owner.login}/${payload.repository.name}/tree/${branchName}`;
-
-        await octokit.rest.issues.createComment({
-            owner: payload.repository.owner.login,
-            repo: payload.repository.name,
-            issue_number: payload.issue.number,
-            body: `Branch created: [${branchName}](${branchUrl})`
-        });
+        const branchComment = `Branch created: [${branchName}](${branchUrl})`;
+        await commentIssue(octokit, payload, branchComment);
 
         console.log(`Branch ${branchName} created`);
     } catch (exc) {

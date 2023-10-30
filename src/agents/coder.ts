@@ -3,7 +3,7 @@ import { BranchDetails, ChatMessage, sleep } from '../constants';
 import { LLM_FUNCTIONS, LLM_FUNCTION_MAP, TASK_LLM_FUNCTION, getCodeAgentPrompt, getPlanBreakdownPrompt } from '../prompts/code-prompt';
 import { Octokit } from "@octokit/rest";
 import { WebhookEventMap } from "@octokit/webhooks-definitions/schema";
-import { createBranch } from '../reviews';
+import { commentIssue, createBranch } from '../reviews';
 import { AutoblocksTracer } from '@autoblocks/client';
 import * as crypto from 'crypto';
 
@@ -186,6 +186,7 @@ export const processTask = async (goal: string, tree: string, octokit: Octokit, 
         stepCount += 1;
     }
     console.log(convo);
+    await commentIssue(octokit, payload, "Finished Processing")
     console.log("DONE PROCESSING");
     
     return "done";

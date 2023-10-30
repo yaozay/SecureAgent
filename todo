@@ -60,18 +60,9 @@ MUST OPEN FILE BEFORE EDIT can be called on the file!
 Breakdown each edit into steps before executing edit.
 Embed and query goal against repo embeddings to get inital set of relevant files... Maybe preload context?
 
-the edit function should insert NOT overwrite (this causes too many issues).
 Does not take into account full context of the files, need to figure this out
 
-relevantTask is not accurate (remove?)
-
-
-how to determine when a task is achieved
-- a task may take multiple steps
-
-
 NOW!
-Generalize to multiple repo types
 
 Follow up with everyone on twitter + email
 reach out to 10 potential users
@@ -79,3 +70,10 @@ reach out to 10 potential users
 DEBUG
 - why did robert's pr get bad feedback?
 -- https://github.com/r-cha/concerto/pull/31
+
+
+What is the most important thing for the business:
+1. Getting a paying customer
+2. Addressing PR feedback from Axiom
+3. Examine bad PR feedback
+4. PR inline comments
