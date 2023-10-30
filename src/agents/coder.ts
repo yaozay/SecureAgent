@@ -35,14 +35,14 @@ const chatFunctions = async (sessionId: string, convo: ChatMessage[], funcs: any
             },
         });
         if (!response.choices[0].message.function_call) {
-            throw new Error(JSON.stringify(response));
+            throw new Error(`Failed to call function. Context:\n${response.choices[0].message.content}`);
         }
         return response;
     } catch (exc) {
         console.log(exc);
         await tracer.sendEvent('code-agent.error', {
             properties: {
-                exc,
+                exc: exc
             },
         });
         throw new Error("Error getting LLM Response");
