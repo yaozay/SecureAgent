@@ -277,13 +277,21 @@ const preprocessFile = async (octokit: Octokit, payload: WebhookEventMap["pull_r
 }
 
 export const processPullRequest = async (octokit: Octokit, payload: WebhookEventMap["pull_request"], files: PRFile[], model: LLModel = "gpt-3.5-turbo", includeSuggestions = false) => {
-    await Promise.all(files.map((file) => {
+    const filteredFiles = files.filter((file) => filterFile(file));
+    if (filteredFiles.length == 0) {
+        console.log("nothing to comment on")
+        return {
+            review: null,
+            suggestions: []
+        }
+    }
+    await Promise.all(filteredFiles.map((file) => {
         return preprocessFile(octokit, payload, file)
     }));
     if (includeSuggestions) {
         const [review, suggestions] = await Promise.all([
-            reviewChanges(files, model),
-            generateCodeSuggestions(files, model)
+            reviewChanges(filteredFiles, model),
+            generateCodeSuggestions(filteredFiles, model)
         ]);
 
         return {
@@ -292,7 +300,7 @@ export const processPullRequest = async (octokit: Octokit, payload: WebhookEvent
         };
     } else {
         const [review] = await Promise.all([
-            reviewChanges(files, model),
+            reviewChanges(filteredFiles, model),
         ]);
 
         return {
