@@ -61,9 +61,9 @@ export const processGitFilepath = (filepath: string) => {
 }
 
 export interface EnclosingContext {
-    enclosingFunction: any
+    enclosingContext: any
 }
 
 export interface AbstractParser {
-    findEnclosingFunction(file: string, lineStart: number, lineEnd: number): EnclosingContext;
+    findEnclosingContext(file: string, lineStart: number, lineEnd: number): EnclosingContext;
 }

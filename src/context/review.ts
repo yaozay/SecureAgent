@@ -114,10 +114,10 @@ const functionalContextPerHunk = (currentFile: string, hunk: diff.Hunk, parser: 
     // Calculate the start and end lines of the changes in the hunk
     const lineStart = trimmedHunk.newStart;
     const lineEnd = lineStart + insertions;
-    const largestEnclosingFunction: any = parser.findEnclosingFunction(currentFile, lineStart, lineEnd).enclosingFunction;
-    if (largestEnclosingFunction) {
-        const functionStartLine = largestEnclosingFunction.loc.start.line;
-        const functionEndLine = largestEnclosingFunction.loc.end.line;
+    const largestEnclosingContext: any = parser.findEnclosingContext(currentFile, lineStart, lineEnd).enclosingContext;
+    if (largestEnclosingContext) {
+        const functionStartLine = largestEnclosingContext.loc.start.line;
+        const functionEndLine = largestEnclosingContext.loc.end.line;
         const updatedFileLines = currentFile.split('\n');
         // Extract the lines of the function
         const functionContext = updatedFileLines.slice(functionStartLine - 1, functionEndLine);
@@ -147,7 +147,7 @@ const functionalContextPerHunkBackup = (currentFile: string, hunk: diff.Hunk, pa
     const insertions = hunk.lines.filter((line) => line.startsWith("+")).length;
     const lineStart = trimmedHunk.newStart;
     const lineEnd = lineStart + insertions;
-    const largestEnclosingFunction: any = parser.findEnclosingFunction(currentFile, lineStart, lineEnd).enclosingFunction;
+    const largestEnclosingFunction: any = parser.findEnclosingContext(currentFile, lineStart, lineEnd).enclosingContext;
     if (largestEnclosingFunction) {
         const functionStartLine = largestEnclosingFunction.loc.start.line;
         const functionEndLine = largestEnclosingFunction.loc.end.line;

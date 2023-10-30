@@ -1,39 +1,38 @@
 import { AbstractParser, EnclosingContext } from "../../constants";
 import * as parser from '@babel/parser';
-import traverse from "@babel/traverse";
+import traverse, { NodePath, Node } from "@babel/traverse";
+
+const processNode = (path: NodePath<Node>, lineStart: number, lineEnd: number, largestSize: number, largestEnclosingContext: Node | null) => {
+    const { start, end } = path.node.loc;
+    if (start.line <= lineStart && lineEnd <= end.line) {
+        const size = end.line - start.line;
+        if (size > largestSize) {
+            largestSize = size;
+            largestEnclosingContext = path.node;
+        }
+    }
+    return { largestSize, largestEnclosingContext };
+}
+
 
 export class JavascriptParser implements AbstractParser {
-    findEnclosingFunction(file: string, lineStart: number, lineEnd: number): EnclosingContext {
+    findEnclosingContext(file: string, lineStart: number, lineEnd: number): EnclosingContext {
         const ast = parser.parse(file, {
             sourceType: 'module',
             plugins: ['jsx', 'typescript'], // To allow JSX and TypeScript
         });
-        let largestEnclosingFunction: any = null;
+        let largestEnclosingContext: any = null;
         let largestSize = 0;
         traverse(ast, {
             Function(path) {
-                const { start, end } = path.node.loc;
-                if (start.line <= lineStart && lineEnd <= end.line) {
-                    const size = end.line - start.line;
-                    if (size > largestSize) {
-                        largestSize = size;
-                        largestEnclosingFunction = path.node;
-                    }
-                }
+                ({largestSize, largestEnclosingContext} = processNode(path, lineStart, lineEnd, largestSize, largestEnclosingContext));
             },
             TSInterfaceDeclaration(path) {
-                const { start, end } = path.node.loc;
-                if (start.line <= lineStart && lineEnd <= end.line) {
-                    const size = end.line - start.line;
-                    if (size > largestSize) {
-                        largestSize = size;
-                        largestEnclosingFunction = path.node;
-                    }
-                }
+                ({largestSize, largestEnclosingContext} = processNode(path, lineStart, lineEnd, largestSize, largestEnclosingContext));
             }
         });
         return {
-            enclosingFunction: largestEnclosingFunction
+            enclosingContext: largestEnclosingContext
         } as EnclosingContext;
     }
 }
