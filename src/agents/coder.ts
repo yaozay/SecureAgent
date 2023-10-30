@@ -42,7 +42,7 @@ const chatFunctions = async (sessionId: string, convo: ChatMessage[], funcs: any
         console.log(exc);
         await tracer.sendEvent('code-agent.error', {
             properties: {
-                exc: exc
+                "exc": String(exc)
             },
         });
         throw new Error("Error getting LLM Response");
