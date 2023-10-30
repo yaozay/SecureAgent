@@ -22,7 +22,7 @@ export class JavascriptParser implements AbstractParser {
                 }
             },
             TSInterfaceDeclaration(path) {
-                console.log("IN INTERFACE PROCESS")
+            TSInterfaceDeclaration(path) {
                 const { start, end } = path.node.loc;
                 if (start.line <= lineStart && lineEnd <= end.line) {
                     const size = end.line - start.line;
