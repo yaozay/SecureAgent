@@ -56,7 +56,7 @@ Consider your code change in the context of the whole file! Your code change sho
 
 
 You are provided with 3 fuctions done, open, and edit, use whichever one will help you accomplish the goal.
-ONLY RESPOND WITH FUNCTION CALLS OPEN, EDIT, or DONE.
+ONLY RESPOND WITH FUNCTION CALLS OPEN, EDIT, or DONE. YOU MUST RESPOND WITH A VALID FUNCTION CALL.
 YOU MUST CALL DONE ONCE THE GOAL IS COMPLETE.`;
 
 export const getCodeAgentPrompt = (goal: string, repoTree: string, tasks: string[]): ChatMessage[] => {

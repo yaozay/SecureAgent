@@ -6,8 +6,9 @@ import { WebhookEventMap } from "@octokit/webhooks-definitions/schema";
 import { commentIssue, createBranch } from '../reviews';
 import { AutoblocksTracer } from '@autoblocks/client';
 import * as crypto from 'crypto';
+import { LLM_VOTE_FN, getTaskVotePrompt } from '../prompts/tree-of-thought';
 
-const chatFunctions = async (sessionId: string, convo: ChatMessage[], funcs: any) => {
+const chatFunctions = async (sessionId: string, convo: ChatMessage[], funcs: any, extraParams = {}) => {
     const tracer = new AutoblocksTracer(process.env.AUTOBLOCKS_INGESTION_KEY, {
         traceId: sessionId,
         properties: {
@@ -21,7 +22,7 @@ const chatFunctions = async (sessionId: string, convo: ChatMessage[], funcs: any
         model: "gpt-4-0613",
         messages: convo,
         functions: funcs,
-        function_call: "auto"
+        ...extraParams
     };
     await tracer.sendEvent('code-agent.request', {
         properties: requestParams,
@@ -55,14 +56,18 @@ const postprocessTasks = (tasks: string[]) => {
 
 const generatePlan = async (sessionId: string, goal: string) => {
     const convo = getPlanBreakdownPrompt(goal);
-    const response = await chatFunctions(sessionId, convo, TASK_LLM_FUNCTION);
-    const responseMessage = response.choices[0].message;
-    console.log(responseMessage);
-    if (!responseMessage.function_call) {
-        throw "DID NOT CALL A FUNCTION";
-    }
-    const subtasks: string[] = JSON.parse(responseMessage.function_call.arguments)["tasks"];
-    return subtasks;
+    const response = await chatFunctions(sessionId, convo, TASK_LLM_FUNCTION, {"function_call": {"name": "taskBreakdown"}, "temperature": 0.7, n : 3});
+
+    const taskLists: string[][] = response.choices.map((choice) => {
+        return JSON.parse(choice.message.function_call.arguments)["tasks"];
+    });
+ 
+    const taskVotePrompt = getTaskVotePrompt(goal, taskLists);
+    const selectedTaskResponse = await chatFunctions(sessionId, taskVotePrompt, LLM_VOTE_FN, {"function_call": {"name": "evaluateTaskList"}, "temperature": 0.7})
+
+    const selectedIdx: number = JSON.parse(selectedTaskResponse.choices[0].message.function_call.arguments)["index"];
+
+    return taskLists[selectedIdx];
 }
 
 const canTakeAction = (actionMap: Map<string, string[]>, proposedAction: string, filepath: string) => {
@@ -164,6 +169,7 @@ export const processTask = async (goal: string, tree: string, octokit: Octokit, 
             } catch (exc) {
                 console.log(exc);
                 console.log(`Executing single retry!`);
+                convo.push({"role": "assistant", "content": "YOU MUST RESPOND WITH A FUNCTION CALL!"});
                 step = await runStep(sessionId, convo, actions, actionMap, octokit, payload, branch);
             }
             console.log(step);
