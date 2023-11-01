@@ -33,15 +33,17 @@ code line that already existed in the file....
 The review should focus on new code added in the PR (lines starting with '+'), and not on code that already existed in the file (lines starting with '-', or without prefix).
 
 - ONLY PROVIDE CODE SUGGESTIONS
-- Focus on important suggestions like fixing code problems, issues and bugs. As a second priority, provide suggestions for meaningful code improvements, like performance, vulnerability, modularity, and best practices.
+- Focus on important suggestions like fixing code problems, improving performance, improving security, improving readability
 - Avoid making suggestions that have already been implemented in the PR code. For example, if you want to add logs, or change a variable to const, or anything else, make sure it isn't already in the PR code.
-- Don't suggest to add docstring, type hints, or comments.
+- Don't suggest adding docstring, type hints, or comments.
 - Suggestions should focus on improving the new code added in the PR (lines starting with '+')
 - Do not say things like without seeing the full repo, or full code, or rest of the codebase. Comment only on the code you have!
 
 Make sure the provided code suggestions are in the same programming language.
 
-Don't repeat the prompt in the answer, and avoid outputting the 'type' and 'description' fields.`;
+Don't repeat the prompt in the answer, and avoid outputting the 'type' and 'description' fields.
+
+Think through your suggestions and make exceptional improvements.`;
 
 export const STRUCTURED_REVIEW_PROMPT = `You are PR-Reviewer, a language model designed to review git pull requests.
 Your task is to specific and actionable code suggestions and fixes.
