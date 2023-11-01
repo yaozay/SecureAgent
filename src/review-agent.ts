@@ -1,12 +1,13 @@
 import OpenAI from 'openai';
-import { buildPatchPrompt, buildSuggestionPrompt, constructPrompt, getModelTokenLimit, getReviewPrompt, getSuggestionPrompt, getTokenLength, isConversationWithinLimit, postProcessCodeSuggestions, withinModelTokenLimit } from './prompts';
-import { BranchDetails, ChatMessage, CodeSuggestion, LLModel, PRFile } from './constants';
+import { PR_SUGGESTION_TEMPLATE, buildPatchPrompt, buildSuggestionPrompt, constructPrompt, getModelTokenLimit, getReviewPrompt, getSuggestionPrompt, getTokenLength, getXMLReviewPrompt, isConversationWithinLimit, postProcessCodeSuggestions, withinModelTokenLimit } from './prompts';
+import { BranchDetails, ChatMessage, CodeSuggestion, LLModel, PRFile, PRSuggestion } from './constants';
 import { PullRequestEvent, WebhookEventMap } from '@octokit/webhooks-definitions/schema';
 import { axiom } from './logger';
 import { Octokit } from '@octokit/rest';
 import { getGitFile } from './reviews';
 import { AutoblocksTracer } from '@autoblocks/client';
 import * as crypto from 'crypto';
+import * as xml2js from "xml2js";
 
 interface PRLogEvent {
     id: number;
@@ -178,9 +179,52 @@ const processOutsideLimitFiles = (files: PRFile[], model: LLModel, patchBuilder:
     return processGroups;
 }
 
+const processXMLSuggestions = async (feedbacks: string[]) => {
+    const xmlParser = new xml2js.Parser({ explicitArray: false });
+    const parsedSuggestions = await Promise.all(
+        feedbacks.map((fb) => xmlParser.parseStringPromise(fb))
+    );
+    const suggestions: PRSuggestion[] = parsedSuggestions.flatMap(parsedSuggestion => 
+        parsedSuggestion.review.suggestion.map((rawSuggestion: any) => {
+            const lines = rawSuggestion.code.trim().split("\n")
+            lines[0] = lines[0].trim()
+            lines[lines.length-1] = lines[lines.length-1].trim()
+            const code = lines.join("\n")
+
+            return {
+                describe: rawSuggestion.describe,
+                type: rawSuggestion.type,
+                comment: rawSuggestion.comment,
+                code: code,
+                filename: rawSuggestion.filename
+            } as PRSuggestion;
+        })
+    );
+    return suggestions;
+}
+
+const convertPRSuggestionToComment = (suggestions: PRSuggestion[]) => {
+    const suggestionsMap = new Map<string, PRSuggestion[]>();
+    suggestions.forEach((suggestion) => {
+        if (!suggestionsMap.has(suggestion.filename)) {
+            suggestionsMap.set(suggestion.filename, []);
+        }
+        suggestionsMap.get(suggestion.filename).push(suggestion);
+    });
+    const comments: string[] = [];
+    for (let [filename, suggestions] of suggestionsMap) {
+        const temp = [`## ${filename}\n`];
+        suggestions.forEach((suggestion: PRSuggestion) => {
+            temp.push(PR_SUGGESTION_TEMPLATE.replace("{COMMENT}", suggestion.comment).replace("{CODE}", suggestion.code));
+        });
+        comments.push(temp.join("\n"));
+    }
+    return comments;
+}
+
 export const reviewChanges = async (files: PRFile[], model: LLModel = "gpt-3.5-turbo") => {
     const patchBuilder = buildPatchPrompt;
-    const convoBuilder = getReviewPrompt;
+    const convoBuilder = getXMLReviewPrompt;
     const filteredFiles = files.filter((file) => filterFile(file));
     filteredFiles.map((file) => {
         file.patchTokenLength = getTokenLength(patchBuilder(file));
@@ -212,9 +256,9 @@ export const reviewChanges = async (files: PRFile[], model: LLModel = "gpt-3.5-t
             return reviewFiles(patchGroup, model, patchBuilder, convoBuilder);
         })
     );
-    const review = feedbacks.join("\n");
-    console.log(review);
-    return review;
+    const parsedXMLSuggestions = await processXMLSuggestions(feedbacks);
+    const comments = convertPRSuggestionToComment(parsedXMLSuggestions);
+    return comments.join("\n")
 }
 
 export const generateCodeSuggestions = async (files: PRFile[], model: LLModel = "gpt-3.5-turbo") => {

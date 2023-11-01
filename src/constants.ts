@@ -26,6 +26,14 @@ export interface PatchInfo {
     }[]
 }
 
+export interface PRSuggestion {
+    describe: string;
+    type: string;
+    comment: string;
+    code: string;
+    filename: string;
+}
+
 export interface CodeSuggestion {
     file: string;
     line_start: number;
@@ -38,7 +46,6 @@ export interface ChatMessage {
     role: string;
     content: string;
 }
-
 
 export interface Review {
     review: string;
