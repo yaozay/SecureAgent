@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import { PR_SUGGESTION_TEMPLATE, buildPatchPrompt, buildSuggestionPrompt, constructPrompt, getModelTokenLimit, getReviewPrompt, getSuggestionPrompt, getTokenLength, getXMLReviewPrompt, isConversationWithinLimit, postProcessCodeSuggestions, withinModelTokenLimit } from './prompts';
-import { BranchDetails, ChatMessage, CodeSuggestion, LLModel, PRFile, PRSuggestion } from './constants';
+import { BranchDetails, Builders, ChatMessage, CodeSuggestion, LLModel, PRFile, PRSuggestion } from './constants';
 import { PullRequestEvent, WebhookEventMap } from '@octokit/webhooks-definitions/schema';
 import { axiom } from './logger';
 import { Octokit } from '@octokit/rest';
@@ -44,7 +44,7 @@ export const reviewDiff = async (convo: ChatMessage[], model: LLModel = "gpt-3.5
     await tracer.sendEvent('review-agent.request', {
         properties: requestParams,
     });
-    console.log(convo);
+    // console.log(convo);
     try {
         //@ts-ignore
         const chatCompletion = await openai.chat.completions.create(requestParams);
@@ -180,26 +180,30 @@ const processOutsideLimitFiles = (files: PRFile[], model: LLModel, patchBuilder:
 }
 
 const processXMLSuggestions = async (feedbacks: string[]) => {
-    const xmlParser = new xml2js.Parser({ explicitArray: false });
+    const xmlParser = new xml2js.Parser();
     const parsedSuggestions = await Promise.all(
-        feedbacks.map((fb) => xmlParser.parseStringPromise(fb))
-    );
-    const suggestions: PRSuggestion[] = parsedSuggestions.flatMap(parsedSuggestion => 
-        parsedSuggestion.review.suggestion.map((rawSuggestion: any) => {
-            const lines = rawSuggestion.code.trim().split("\n")
-            lines[0] = lines[0].trim()
-            lines[lines.length-1] = lines[lines.length-1].trim()
-            const code = lines.join("\n")
-
-            return {
-                describe: rawSuggestion.describe,
-                type: rawSuggestion.type,
-                comment: rawSuggestion.comment,
-                code: code,
-                filename: rawSuggestion.filename
-            } as PRSuggestion;
+        feedbacks.map((fb) => {
+            fb = fb.split('<code>').join('<code><![CDATA[').split('</code>').join(']]></code>');
+            console.log(fb)
+            return xmlParser.parseStringPromise(fb);
         })
     );
+    // gets suggestion arrays [[suggestion], [suggestion]], then flattens
+    const allSuggestions = parsedSuggestions.map((sug) => sug.review.suggestion).flat(1)
+    const suggestions: PRSuggestion[] = allSuggestions.map(rawSuggestion => {
+        const lines = rawSuggestion.code[0].trim().split("\n")
+        lines[0] = lines[0].trim()
+        lines[lines.length-1] = lines[lines.length-1].trim()
+        const code = lines.join("\n")
+
+        return {
+            describe: rawSuggestion.describe[0],
+            type: rawSuggestion.type[0],
+            comment: rawSuggestion.comment[0],
+            code: code,
+            filename: rawSuggestion.filename[0]
+        } as PRSuggestion;
+    });
     return suggestions;
 }
 
@@ -222,9 +226,20 @@ const convertPRSuggestionToComment = (suggestions: PRSuggestion[]) => {
     return comments;
 }
 
-export const reviewChanges = async (files: PRFile[], model: LLModel = "gpt-3.5-turbo") => {
+const xmlResponseBuilder = async (feedbacks: string[]) => {
+    console.log("IN XML RESPONSE BUILDER");
+    const parsedXMLSuggestions = await processXMLSuggestions(feedbacks);
+    const comments = convertPRSuggestionToComment(parsedXMLSuggestions);
+    return comments.join("\n")
+}
+
+const basicResponseBuilder = async (feedbacks: string[]) => {
+    console.log("IN BASIC RESPONSE BUILDER");
+    return feedbacks.join("\n");
+}
+
+export const reviewChanges = async (files: PRFile[], convoBuilder: (diff: string) => ChatMessage[], responseBuilder: (responses: string[]) => Promise<string>, model: LLModel = "gpt-3.5-turbo") => {
     const patchBuilder = buildPatchPrompt;
-    const convoBuilder = getXMLReviewPrompt;
     const filteredFiles = files.filter((file) => filterFile(file));
     filteredFiles.map((file) => {
         file.patchTokenLength = getTokenLength(patchBuilder(file));
@@ -256,9 +271,13 @@ export const reviewChanges = async (files: PRFile[], model: LLModel = "gpt-3.5-t
             return reviewFiles(patchGroup, model, patchBuilder, convoBuilder);
         })
     );
-    const parsedXMLSuggestions = await processXMLSuggestions(feedbacks);
-    const comments = convertPRSuggestionToComment(parsedXMLSuggestions);
-    return comments.join("\n")
+    try {
+        return await responseBuilder(feedbacks);
+    } catch (exc) {
+        console.log("XML parsing error");
+        console.log(exc);
+        throw exc;
+    }
 }
 
 export const generateCodeSuggestions = async (files: PRFile[], model: LLModel = "gpt-3.5-turbo") => {
@@ -320,6 +339,18 @@ const preprocessFile = async (octokit: Octokit, payload: WebhookEventMap["pull_r
     }
 }
 
+const reviewChangesRetry = async (files: PRFile[], builders: Builders[], model: LLModel = "gpt-3.5-turbo") => {
+    for (const {convoBuilder, responseBuilder} of builders) {
+        try {
+            console.log(`Trying with convoBuilder: ${convoBuilder.name}.`);
+            return await reviewChanges(files, convoBuilder, responseBuilder, model);
+        } catch (error) {
+            console.log(`Error with convoBuilder: ${convoBuilder.name}, trying next one. Error: ${error}`);
+        }
+    }
+    throw new Error('All convoBuilders failed.');
+}
+
 export const processPullRequest = async (octokit: Octokit, payload: WebhookEventMap["pull_request"], files: PRFile[], model: LLModel = "gpt-3.5-turbo", includeSuggestions = false) => {
     const filteredFiles = files.filter((file) => filterFile(file));
     if (filteredFiles.length == 0) {
@@ -334,7 +365,10 @@ export const processPullRequest = async (octokit: Octokit, payload: WebhookEvent
     }));
     if (includeSuggestions) {
         const [review, suggestions] = await Promise.all([
-            reviewChanges(filteredFiles, model),
+            reviewChangesRetry(filteredFiles, [
+                {convoBuilder: getXMLReviewPrompt, responseBuilder: xmlResponseBuilder},
+                {convoBuilder: getReviewPrompt, responseBuilder: basicResponseBuilder}
+            ], model),
             generateCodeSuggestions(filteredFiles, model)
         ]);
 
@@ -344,7 +378,10 @@ export const processPullRequest = async (octokit: Octokit, payload: WebhookEvent
         };
     } else {
         const [review] = await Promise.all([
-            reviewChanges(filteredFiles, model),
+            reviewChangesRetry(filteredFiles, [
+                {convoBuilder: getXMLReviewPrompt, responseBuilder: xmlResponseBuilder},
+                {convoBuilder: getReviewPrompt, responseBuilder: basicResponseBuilder}
+            ], model),
         ]);
 
         return {

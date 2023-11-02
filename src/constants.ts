@@ -16,6 +16,11 @@ export interface PRFile {
     old_contents?: string;
 };
 
+export interface Builders {
+    convoBuilder: (diff: string) => ChatMessage[];
+    responseBuilder: (feedbacks: string[]) => Promise<string>;
+}
+
 export interface PatchInfo {
     hunks: {
       oldStart: number,
