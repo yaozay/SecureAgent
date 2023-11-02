@@ -207,7 +207,20 @@ const processXMLSuggestions = async (feedbacks: string[]) => {
     return suggestions;
 }
 
-const convertPRSuggestionToComment = (suggestions: PRSuggestion[]) => {
+const generateGithubIssueUrl = (owner: string, repoName: string, title: string, body: string, codeblock?: string) => {
+    const encodedTitle = encodeURIComponent(title);
+    const encodedBody = encodeURIComponent(body);
+    const encodedCodeBlock = codeblock ? encodeURIComponent(`\n${codeblock}\n`) : '';
+
+    let url = `https://github.com/${owner}/${repoName}/issues/new?title=${encodedTitle}&body=${encodedBody}${encodedCodeBlock}`;
+
+    if (url.length > 2048) {
+        url = `https://github.com/${owner}/${repoName}/issues/new?title=${encodedTitle}&body=${encodedBody}`;
+    }
+    return `[Create Issue](${url})`;
+}
+
+const convertPRSuggestionToComment = (owner: string, repo: string, suggestions: PRSuggestion[]) => {
     const suggestionsMap = new Map<string, PRSuggestion[]>();
     suggestions.forEach((suggestion) => {
         if (!suggestionsMap.has(suggestion.filename)) {
@@ -219,19 +232,27 @@ const convertPRSuggestionToComment = (suggestions: PRSuggestion[]) => {
     for (let [filename, suggestions] of suggestionsMap) {
         const temp = [`## ${filename}\n`];
         suggestions.forEach((suggestion: PRSuggestion) => {
-            temp.push(PR_SUGGESTION_TEMPLATE.replace("{COMMENT}", suggestion.comment).replace("{CODE}", suggestion.code));
+            const issueLink = generateGithubIssueUrl(owner, repo, suggestion.describe, suggestion.comment, suggestion.code);
+            temp.push(
+                PR_SUGGESTION_TEMPLATE.replace("{COMMENT}", suggestion.comment).replace("{CODE}", suggestion.code).replace("{ISSUE_LINK}", issueLink)
+            );
         });
         comments.push(temp.join("\n"));
     }
     return comments;
 }
 
-const xmlResponseBuilder = async (feedbacks: string[]) => {
+const xmlResponseBuilder = async (owner: string, repoName: string, feedbacks: string[]) => {
     console.log("IN XML RESPONSE BUILDER");
     const parsedXMLSuggestions = await processXMLSuggestions(feedbacks);
-    const comments = convertPRSuggestionToComment(parsedXMLSuggestions);
+    const comments = convertPRSuggestionToComment(owner, repoName, parsedXMLSuggestions);
     return comments.join("\n")
 }
+
+const curriedXmlResponseBuilder = (owner: string, repoName: string) => {
+    return (feedbacks: string[]) => xmlResponseBuilder(owner, repoName, feedbacks);
+}
+
 
 const basicResponseBuilder = async (feedbacks: string[]) => {
     console.log("IN BASIC RESPONSE BUILDER");
@@ -363,10 +384,13 @@ export const processPullRequest = async (octokit: Octokit, payload: WebhookEvent
     await Promise.all(filteredFiles.map((file) => {
         return preprocessFile(octokit, payload, file)
     }));
+    const owner = payload.repository.owner.login;
+    const repoName = payload.repository.name;
+    const curriedXMLResponseBuilder = curriedXmlResponseBuilder(owner, repoName);
     if (includeSuggestions) {
         const [review, suggestions] = await Promise.all([
             reviewChangesRetry(filteredFiles, [
-                {convoBuilder: getXMLReviewPrompt, responseBuilder: xmlResponseBuilder},
+                {convoBuilder: getXMLReviewPrompt, responseBuilder: curriedXMLResponseBuilder},
                 {convoBuilder: getReviewPrompt, responseBuilder: basicResponseBuilder}
             ], model),
             generateCodeSuggestions(filteredFiles, model)
@@ -379,7 +403,7 @@ export const processPullRequest = async (octokit: Octokit, payload: WebhookEvent
     } else {
         const [review] = await Promise.all([
             reviewChangesRetry(filteredFiles, [
-                {convoBuilder: getXMLReviewPrompt, responseBuilder: xmlResponseBuilder},
+                {convoBuilder: getXMLReviewPrompt, responseBuilder: curriedXMLResponseBuilder},
                 {convoBuilder: getReviewPrompt, responseBuilder: basicResponseBuilder}
             ], model),
         ]);
