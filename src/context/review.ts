@@ -184,7 +184,7 @@ const diffContextPerHunk = (file: PRFile, parser: AbstractParser) => {
     const updatedFile = diff.applyPatch(file.old_contents, file.patch);
     const patches = diff.parsePatch(file.patch);
     if (!updatedFile) {
-        console.log("APPLYING PATCH ERROR - FALLINGBACK");
+        // console.log("APPLYING PATCH ERROR - FALLINGBACK");
         // return fallback
         throw "THIS SHOULD NOT HAPPEN!"
     }
@@ -201,11 +201,11 @@ const diffContextPerHunk = (file: PRFile, parser: AbstractParser) => {
             try {
                 // should only for ts, tsx, js, jsx files rn
                 context = functionalContextPerHunk(updatedFile, hunk, parser).join("\n")
-                console.log("!!!!!!!!!! WORKED !!!!!!!!!!!!!!")
-                console.log(context);
+                // console.log("!!!!!!!!!! WORKED !!!!!!!!!!!!!!")
+                // console.log(context);
             } catch (exc) {
-                console.log(exc);
-                console.log("!!!!!!!! FALLING BACK !!!!!!!!!")
+                // console.log(exc);
+                // console.log("!!!!!!!! FALLING BACK !!!!!!!!!")
                 context = expandHunk(file.old_contents, hunk);
             }
             contextPerHunk.push(context);
@@ -217,7 +217,7 @@ const diffContextPerHunk = (file: PRFile, parser: AbstractParser) => {
 }
 
 const functionContextPatchStrategy = (file: PRFile, parser: AbstractParser) => {
-    console.log("USING DIFF FUNCTION CONTEXT STRATEGY");
+    // console.log("USING DIFF FUNCTION CONTEXT STRATEGY");
     const contextChunks = diffContextPerHunk(file, parser);
     let res = null;
     try {
