@@ -171,9 +171,12 @@ const insertFileLines = (contents: string, code: string, lineStart: number) => {
 }
 
 export const editFileContents = async (octokit: Octokit, payload: WebhookEventMap["issues"], branch: BranchDetails, mode: string, filepath: string, code: string, lineStart: number) => {
+    if (lineStart === undefined) {
+        lineStart = 0;
+    }
     try {
         let fileContent = await getGitFile(octokit, payload, branch, processGitFilepath(filepath))
-        const rawContents = String.raw`${fileContent.content}`;
+        const rawContents = String.raw`${fileContent.content || ""}`;
         const rawCode = String.raw`${code}`;
 
         let updatedLines: string[] = [];
@@ -189,7 +192,7 @@ export const editFileContents = async (octokit: Octokit, payload: WebhookEventMa
         const encodedContent = Buffer.from(updatedContent).toString('base64');
 
         // Commit the changes to the branch
-        await octokit.rest.repos.createOrUpdateFileContents({
+        const commitResponse = await octokit.rest.repos.createOrUpdateFileContents({
             owner: payload.repository.owner.login,
             repo: payload.repository.name,
             path: filepath,
@@ -200,7 +203,19 @@ export const editFileContents = async (octokit: Octokit, payload: WebhookEventMa
         });
 
         console.log(`Edited file: ${filepath}`);
-        return { result: `Successfully edited file: ${filepath}`, functionString: `Editing file: ${filepath} with ${code}`}
+
+        // Get the diff between the current branch and the default branch
+        const compareResponse = await octokit.rest.repos.compareCommits({
+            owner: payload.repository.owner.login,
+            repo: payload.repository.name,
+            base: payload.repository.default_branch,
+            head: branch.name
+        });
+
+        // Filter the files to get the diff for the specific file
+        const fileDiff = compareResponse.data.files.find(file => file.filename === filepath)?.patch;
+
+        return { result: `Successfully edited file: ${filepath}`, functionString: `Editing file: ${filepath} with ${code}. Diff after commit:\n${fileDiff}`}
     } catch (exc) {
         console.log(exc);
     }

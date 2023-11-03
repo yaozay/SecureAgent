@@ -41,28 +41,12 @@ Convert code suggestions into a proper function call
 
 CODE BOT
 
-Explicit file create functionality
+Pass in diff after EDITs
+if calling OPEN again, remove old OPEN result
+clean up each EDITs at the end?
+null at end of file when creating them. why?
+handle forcing open in ToT
 
-Needs to comment done on original issue when exiting loop
-JSON exception common
-
-Doesn't always call fns (needs to stay within schema better)
-
-break original goal into tasks
-- accomplish list of tasks
-Determine when goal is achieved
-
-Need to be able to self determine when task is done, should not be limited to 5 steps!
-
-move to next step after editing a file
-
-MUST OPEN FILE BEFORE EDIT can be called on the file!
-Breakdown each edit into steps before executing edit.
-Embed and query goal against repo embeddings to get inital set of relevant files... Maybe preload context?
-
-Does not take into account full context of the files, need to figure this out
-
-NOW!
 
 Follow up with everyone on twitter + email
 reach out to 10 potential users
