@@ -4,7 +4,7 @@ import { smarterContextPatchStrategy, rawPatchStrategy } from './context/review'
 
 const ModelsToTokenLimits = new Map<string, number>([
   ["gpt-3.5-turbo", 4096],
-  ["gpt-4", 8191]
+  ["gpt-4", 7200]
 ]);
 
 export const REVIEW_DIFF_PROMPT = `You are PR-Reviewer, a language model designed to review git pull requests.

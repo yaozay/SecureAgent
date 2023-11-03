@@ -75,11 +75,15 @@ export const reviewFiles = async (files: PRFile[], model: LLModel, patchBuilder:
 
 const filterFile = (file: PRFile) => {
     const extensionsToIgnore = new Set<string>(["pdf", "png", "jpg", "jpeg", "gif", "mp4", "mp3"])
-    const filesToIgnore = new Set<string>(["package-lock.json", "yarn.lock"]);
-    if (filesToIgnore.has(file.filename)) {
+    const filesToIgnore = new Set<string>(["package-lock.json", "yarn.lock", ".gitignore"]);
+    if (filesToIgnore.has(file.filename.toLowerCase())) {
         return false;
     }
-    const extension = file.filename.split('.').pop()?.toLowerCase();
+    const splitFilename = file.filename.toLowerCase().split('.');
+    if (splitFilename.length <= 1) {
+        return false; // return false if there is no extension
+    }
+    const extension = splitFilename.pop()?.toLowerCase();
     if (extension && extensionsToIgnore.has(extension)) {
         return false;
     }
