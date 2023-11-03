@@ -53,7 +53,6 @@ const CODE_AGENT_SYSTEM_PROMPT = `You are an expert developer.
 - Consider your code change in the context of the whole file! Your code change should not break the existing code!
 - You are provided with 3 actions done, open, and edit, use whichever one will help you accomplish the goal.
 - ONLY RESPOND WITH THE ACTIONS: OPEN, EDIT, or DONE.
-- ONLY CALL DONE WHEN THE ENTIRE GOAL IS FULLY COMPLETE!
 - YOU MUST CALL DONE ONCE THE GOAL IS COMPLETE.`;
 
 export const getCodeAgentPrompt = (goal: string, repoTree: string, tasks: string[]): ChatMessage[] => {
