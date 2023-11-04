@@ -162,7 +162,7 @@ const diffContextPerHunk = (file: PRFile, parser: AbstractParser) => {
     const hunks: diff.Hunk[] = [];
     const order: number[] = [];
     const scopeRangeHunkMap = new Map<string, diff.Hunk[]>();
-    const scopeRangeNodeMap = new Map<string, any>();
+    const scopeRangeNodeMap = new Map<string, Node>();
     const expandStrategy: diff.Hunk[] = [];
     
     patches.forEach((p) => {
@@ -198,7 +198,7 @@ const diffContextPerHunk = (file: PRFile, parser: AbstractParser) => {
         }
     });
 
-    const scopeStategy: any[] = []; // holds map range key and combined hunk: [[key, hunk]]
+    const scopeStategy: [string, diff.Hunk][] = []; // holds map range key and combined hunk: [[key, hunk]]
     for (const [range, hunks] of scopeRangeHunkMap.entries()) {
         const combinedHunk = combineHunks(updatedFile, hunks);
         scopeStategy.push([range, combinedHunk]);
