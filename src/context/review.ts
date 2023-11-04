@@ -211,9 +211,9 @@ const functionalContextPerHunkBackup = (currentFile: string, hunk: diff.Hunk, pa
 }
 
 /*
-suspicion:
-hunk header coming out of this fn is messed up.
-Need to determine what it should be and confirm that it is or isn't correct
+line nums are 0 index, file is 1 index
+confirm this is fixed with a funcion with 3 hunks
+other tests
 
 */
 const combineHunks = (file: string, overlappingHunks: diff.Hunk[]): diff.Hunk => {
@@ -221,6 +221,7 @@ const combineHunks = (file: string, overlappingHunks: diff.Hunk[]): diff.Hunk =>
         return null;
     }
     const sortedHunks = overlappingHunks.sort((a, b) => a.newStart - b.newStart);
+    console.log(sortedHunks.map(h => console.log(h)))
     const fileLines = file.split('\n');
     let lastHunkEnd = sortedHunks[0].newStart + sortedHunks[0].newLines;
 
@@ -232,13 +233,19 @@ const combineHunks = (file: string, overlappingHunks: diff.Hunk[]): diff.Hunk =>
         lines: [...sortedHunks[0].lines],
         linedelimiters: [...sortedHunks[0].linedelimiters]
     };
+    console.log("STARTING:")
+    console.log(combinedHunk);
+    console.log("STARTED");
 
     for (let i = 1; i < sortedHunks.length; i++) {
         const hunk = sortedHunks[i];
+        console.log("PROCESSING:")
+        console.log(hunk);
+        console.log("______")
 
         // If there's a gap between the last hunk and this one, add the lines in between
         if (hunk.newStart > lastHunkEnd) {
-            combinedHunk.lines.push(...fileLines.slice(lastHunkEnd, hunk.newStart));
+            combinedHunk.lines.push(...fileLines.slice(lastHunkEnd-1, hunk.newStart-1));
             combinedHunk.newLines += hunk.newStart - lastHunkEnd;
         }
 
