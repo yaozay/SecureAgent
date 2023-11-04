@@ -1,3 +1,5 @@
+import { Node } from "@babel/traverse";
+
 export type LLModel = "gpt-3.5-turbo" | "gpt-4";
 
 export interface PRFile {
@@ -73,7 +75,7 @@ export const processGitFilepath = (filepath: string) => {
 }
 
 export interface EnclosingContext {
-    enclosingContext: any
+    enclosingContext: Node | null;
 }
 
 export interface AbstractParser {

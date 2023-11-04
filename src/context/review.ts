@@ -1,6 +1,8 @@
 import { AbstractParser, PRFile, PatchInfo } from "../constants";
 import * as diff from 'diff';
 import { JavascriptParser } from "./language/javascript-parser";
+import { Node } from "@babel/traverse";
+
 
 const EXTENSIONS_TO_PARSERS: Map<string, AbstractParser> = new Map([
     ['ts', new JavascriptParser()],
@@ -106,6 +108,34 @@ const getSkipLines = (hunk: diff.Hunk, patchLines: string[]) => {
     return linesToSkip;
 }
 
+const buildingScopeString = (currentFile: string, scope: Node, hunk: diff.Hunk) => {
+    console.log("BUILDING SCOPE STRING");
+    const res: string[] = [];
+    const trimmedHunk = trimHunk(hunk);
+    console.log(trimmedHunk);
+    const functionStartLine = scope.loc.start.line;
+    const functionEndLine = scope.loc.end.line;
+    const updatedFileLines = currentFile.split('\n');
+    // Extract the lines of the function
+    const functionContext = updatedFileLines.slice(functionStartLine - 1, functionEndLine);
+    console.log(functionContext);
+    // Calculate the index where the changes should be injected into the function
+    const injectionIdx = (hunk.newStart - functionStartLine) + hunk.lines.findIndex((line) => line.startsWith("+") || line.startsWith("-"));
+    // Count the number of lines that should be dropped from the function
+    const dropCount = trimmedHunk.lines.filter(line => !line.startsWith("-")).length;
+
+
+    const hunkHeader = `@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`;
+    console.log(injectionIdx);
+    console.log(dropCount)
+    // Inject the changes into the function, dropping the necessary lines
+    functionContext.splice(injectionIdx, dropCount, ...trimmedHunk.lines);
+
+    res.push(functionContext.join("\n"));
+    res.unshift(hunkHeader);
+    return res;
+}
+
 const functionalContextPerHunk = (currentFile: string, hunk: diff.Hunk, parser: AbstractParser) => {
     const trimmedHunk = trimHunk(hunk);
     const res: string[] = [];
@@ -180,43 +210,144 @@ const functionalContextPerHunkBackup = (currentFile: string, hunk: diff.Hunk, pa
     }
 }
 
+/*
+suspicion:
+hunk header coming out of this fn is messed up.
+Need to determine what it should be and confirm that it is or isn't correct
+
+*/
+const combineHunks = (file: string, overlappingHunks: diff.Hunk[]): diff.Hunk => {
+    if (!overlappingHunks || overlappingHunks.length === 0) {
+        return null;
+    }
+    const sortedHunks = overlappingHunks.sort((a, b) => a.newStart - b.newStart);
+    const fileLines = file.split('\n');
+    let lastHunkEnd = sortedHunks[0].newStart + sortedHunks[0].newLines;
+
+    const combinedHunk: diff.Hunk = {
+        oldStart: sortedHunks[0].oldStart,
+        oldLines: sortedHunks[0].oldLines,
+        newStart: sortedHunks[0].newStart,
+        newLines: sortedHunks[0].newLines,
+        lines: [...sortedHunks[0].lines],
+        linedelimiters: [...sortedHunks[0].linedelimiters]
+    };
+
+    for (let i = 1; i < sortedHunks.length; i++) {
+        const hunk = sortedHunks[i];
+
+        // If there's a gap between the last hunk and this one, add the lines in between
+        if (hunk.newStart > lastHunkEnd) {
+            combinedHunk.lines.push(...fileLines.slice(lastHunkEnd, hunk.newStart));
+            combinedHunk.newLines += hunk.newStart - lastHunkEnd;
+        }
+
+        combinedHunk.oldLines += hunk.oldLines;
+        combinedHunk.newLines += hunk.newLines;
+        combinedHunk.lines.push(...hunk.lines);
+        combinedHunk.linedelimiters.push(...hunk.linedelimiters);
+
+        lastHunkEnd = hunk.newStart + hunk.newLines;
+    }
+    console.log("COMBINED");
+    console.log(combinedHunk);
+    return combinedHunk;
+}
+
 const diffContextPerHunk = (file: PRFile, parser: AbstractParser) => {
     const updatedFile = diff.applyPatch(file.old_contents, file.patch);
     const patches = diff.parsePatch(file.patch);
-    if (!updatedFile) {
+    if (!updatedFile || typeof updatedFile !== 'string') {
         // console.log("APPLYING PATCH ERROR - FALLINGBACK");
         // return fallback
         throw "THIS SHOULD NOT HAPPEN!"
     }
-    if (typeof updatedFile === 'string') {
-        const hunks: diff.Hunk[] = [];
-        patches.forEach((p) => {
-            p.hunks.forEach((hunk) => {
-                hunks.push(hunk);
-            })
-        });
-        const contextPerHunk: string[] = [];
-        hunks.forEach(hunk => {
-            let context: string = null;
-            try {
-                // should only for ts, tsx, js, jsx files rn
-                context = functionalContextPerHunk(updatedFile, hunk, parser).join("\n")
-                // console.log("!!!!!!!!!! WORKED !!!!!!!!!!!!!!")
-                // console.log(context);
-            } catch (exc) {
-                // console.log(exc);
-                // console.log("!!!!!!!! FALLING BACK !!!!!!!!!")
-                context = expandHunk(file.old_contents, hunk);
-            }
-            contextPerHunk.push(context);
-        })
-        return contextPerHunk;
-    } else {
-        throw new Error("This should never be thrown")
+    if (typeof updatedFile !== 'string') {
+        throw "Not string;"
     }
+
+    /*
+    option 1
+    patch => hunk[] => fn context[]
+     - hunk fails to get fn context -> hukn goes into basic strategy list - done
+    fn context[] => Map<fn context, hunks[]> - done
+    combineOverlappingHunks(scope: FnContext: hunk[]) => hunk - pending
+    annotateContext(scope: FnContext, hunk: hunk) - pending
+    */
+
+    const hunks: diff.Hunk[] = [];
+    const order: number[] = [];
+    const scopeRangeHunkMap = new Map<string, diff.Hunk[]>();
+    const scopeRangeNodeMap = new Map<string, any>();
+    const expandStrategy: diff.Hunk[] = [];
+    
+    patches.forEach((p) => {
+        p.hunks.forEach((hunk) => {
+            hunks.push(hunk);
+        })
+    });
+
+    hunks.forEach((hunk, idx) => {
+        try {
+            const trimmedHunk = trimHunk(hunk);
+            const insertions = hunk.lines.filter((line) => line.startsWith("+")).length;
+            const lineStart = trimmedHunk.newStart;
+            const lineEnd = lineStart + insertions;
+            const largestEnclosingFunction = parser.findEnclosingContext(updatedFile, lineStart, lineEnd).enclosingContext;
+
+            if (largestEnclosingFunction) {
+                const enclosingRangeKey = `${largestEnclosingFunction.loc.start.line} -> ${largestEnclosingFunction.loc.end.line}`
+                let existingHunks = scopeRangeHunkMap.get(enclosingRangeKey) || [];
+                existingHunks.push(hunk);
+                scopeRangeHunkMap.set(enclosingRangeKey, existingHunks);
+                scopeRangeNodeMap.set(enclosingRangeKey, largestEnclosingFunction);
+            }
+            order.push(idx);
+        } catch (exc) {
+            expandStrategy.push(hunk);
+            order.push(idx);
+        }
+    });
+
+    const scopeStategy: any[] = [];
+    for (const [range, hunks] of scopeRangeHunkMap.entries()) {
+        const combinedHunk = combineHunks(updatedFile, hunks);
+        scopeStategy.push([range, combinedHunk]);
+    }
+
+    const contexts: string[] = [];
+    scopeStategy.forEach(([rangeKey, hunk]) => {
+        const context = buildingScopeString(updatedFile, scopeRangeNodeMap.get(rangeKey), hunk).join("\n")
+        console.log(context)
+        console.log("BUILT")
+        contexts.push(context);
+    })
+    expandStrategy.forEach((hunk) => {
+        const context = expandHunk(file.old_contents, hunk);
+        contexts.push(context);
+    })
+    return contexts;
+
+
+    const contextPerHunk: string[] = [];
+    hunks.forEach(hunk => {
+        let context: string = null;
+        try {
+            // should only for ts, tsx, js, jsx files rn
+            context = functionalContextPerHunk(updatedFile as string, hunk, parser).join("\n`")
+            console.log("!!!!!!!!!! WORKED !!!!!!!!!!!!!!")
+            console.log(context);
+        } catch (exc) {
+            // console.log(exc);
+            console.log("!!!!!!!! FALLING BACK !!!!!!!!!")
+            context = expandHunk(file.old_contents, hunk);
+        }
+        contextPerHunk.push(context);
+    })
+    return contextPerHunk;
 }
 
-const functionContextPatchStrategy = (file: PRFile, parser: AbstractParser) => {
+const functionContextPatchStrategy = (file: PRFile, parser: AbstractParser): string => {
     // console.log("USING DIFF FUNCTION CONTEXT STRATEGY");
     const contextChunks = diffContextPerHunk(file, parser);
     let res = null;
@@ -225,6 +356,8 @@ const functionContextPatchStrategy = (file: PRFile, parser: AbstractParser) => {
     } catch (exc) {
         res = expandedPatchStrategy(file);
     }
+    console.log("!!!!!!@@@@@@@!!!!!!");
+    console.log(res);
     return res;
 }
 

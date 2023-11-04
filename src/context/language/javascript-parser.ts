@@ -21,7 +21,7 @@ export class JavascriptParser implements AbstractParser {
             sourceType: 'module',
             plugins: ['jsx', 'typescript'], // To allow JSX and TypeScript
         });
-        let largestEnclosingContext: any = null;
+        let largestEnclosingContext: Node = null;
         let largestSize = 0;
         traverse(ast, {
             Function(path) {
