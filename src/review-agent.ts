@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import { PR_SUGGESTION_TEMPLATE, buildPatchPrompt, buildSuggestionPrompt, constructPrompt, getModelTokenLimit, getReviewPrompt, getSuggestionPrompt, getTokenLength, getXMLReviewPrompt, isConversationWithinLimit, postProcessCodeSuggestions, withinModelTokenLimit } from './prompts';
-import { BranchDetails, Builders, ChatMessage, CodeSuggestion, LLModel, PRFile, PRSuggestion } from './constants';
+import { BranchDetails, BuilderResponse, Builders, ChatMessage, CodeSuggestion, LLModel, PRFile, PRSuggestion } from './constants';
 import { PullRequestEvent, WebhookEventMap } from '@octokit/webhooks-definitions/schema';
 import { axiom } from './logger';
 import { Octokit } from '@octokit/rest';
@@ -8,6 +8,8 @@ import { getGitFile } from './reviews';
 import { AutoblocksTracer } from '@autoblocks/client';
 import * as crypto from 'crypto';
 import * as xml2js from "xml2js";
+import { INLINE_FN, getInlineFixPrompt } from './prompts/inline-prompt';
+import { chatFns } from './llms/chat';
 
 interface PRLogEvent {
     id: number;
@@ -25,7 +27,7 @@ export const logPRInfo = (pullRequest: PullRequestEvent) => {
     return logEvent;
 }
 
-export const reviewDiff = async (convo: ChatMessage[], model: LLModel = "gpt-3.5-turbo") => {
+export const reviewDiff = async (traceTag: string, convo: ChatMessage[], model: LLModel = "gpt-3.5-turbo") => {
     const tracer = new AutoblocksTracer(process.env.AUTOBLOCKS_INGESTION_KEY, {
         traceId: crypto.randomUUID(),
         properties: {
@@ -41,14 +43,14 @@ export const reviewDiff = async (convo: ChatMessage[], model: LLModel = "gpt-3.5
         model: model,
         temperature: 0
     };
-    await tracer.sendEvent('review-agent.request', {
+    await tracer.sendEvent(`${traceTag}.request`, {
         properties: requestParams,
     });
     // console.log(convo);
     try {
         //@ts-ignore
         const chatCompletion = await openai.chat.completions.create(requestParams);
-        await tracer.sendEvent('review-agent.response', {
+        await tracer.sendEvent(`${traceTag}.response`, {
             properties: {
                 response: chatCompletion
             },
@@ -56,7 +58,7 @@ export const reviewDiff = async (convo: ChatMessage[], model: LLModel = "gpt-3.5
         return chatCompletion.choices[0].message.content;
     } catch (exc) {
         console.log(exc);
-        await tracer.sendEvent('review-agent.error', {
+        await tracer.sendEvent(`${traceTag}.error`, {
             properties: {
                 exc,
             },
@@ -66,10 +68,10 @@ export const reviewDiff = async (convo: ChatMessage[], model: LLModel = "gpt-3.5
     
 }
 
-export const reviewFiles = async (files: PRFile[], model: LLModel, patchBuilder: (file: PRFile) => string, convoBuilder: (diff: string) => ChatMessage[]) => {
+export const reviewFiles = async (traceTag: string, files: PRFile[], model: LLModel, patchBuilder: (file: PRFile) => string, convoBuilder: (diff: string) => ChatMessage[]) => {
     const patches = files.map((file) => patchBuilder(file));
     const convo = convoBuilder(patches.join("\n"));
-    const feedback = await reviewDiff(convo, model);
+    const feedback = await reviewDiff(traceTag, convo, model);
     return feedback
 }
 
@@ -224,7 +226,7 @@ const generateGithubIssueUrl = (owner: string, repoName: string, title: string, 
     return `[Create Issue](${url})`;
 }
 
-const convertPRSuggestionToComment = (owner: string, repo: string, suggestions: PRSuggestion[]) => {
+const convertPRSuggestionToComment = (owner: string, repo: string, suggestions: PRSuggestion[]): string[] => {
     const suggestionsMap = new Map<string, PRSuggestion[]>();
     suggestions.forEach((suggestion) => {
         if (!suggestionsMap.has(suggestion.filename)) {
@@ -246,11 +248,12 @@ const convertPRSuggestionToComment = (owner: string, repo: string, suggestions: 
     return comments;
 }
 
-const xmlResponseBuilder = async (owner: string, repoName: string, feedbacks: string[]) => {
+const xmlResponseBuilder = async (owner: string, repoName: string, feedbacks: string[]): Promise<BuilderResponse> => {
     console.log("IN XML RESPONSE BUILDER");
     const parsedXMLSuggestions = await processXMLSuggestions(feedbacks);
     const comments = convertPRSuggestionToComment(owner, repoName, parsedXMLSuggestions);
-    return comments.join("\n")
+    const commentBlob = comments.join("\n")
+    return { comment: commentBlob, structuredComments: parsedXMLSuggestions }
 }
 
 const curriedXmlResponseBuilder = (owner: string, repoName: string) => {
@@ -258,12 +261,13 @@ const curriedXmlResponseBuilder = (owner: string, repoName: string) => {
 }
 
 
-const basicResponseBuilder = async (feedbacks: string[]) => {
+const basicResponseBuilder = async (feedbacks: string[]): Promise<BuilderResponse> => {
     console.log("IN BASIC RESPONSE BUILDER");
-    return feedbacks.join("\n");
+    const commentBlob = feedbacks.join("\n");
+    return { comment: commentBlob, structuredComments: [] }
 }
 
-export const reviewChanges = async (files: PRFile[], convoBuilder: (diff: string) => ChatMessage[], responseBuilder: (responses: string[]) => Promise<string>, model: LLModel = "gpt-3.5-turbo") => {
+export const reviewChanges = async (traceTag: string, files: PRFile[], convoBuilder: (diff: string) => ChatMessage[], responseBuilder: (responses: string[]) => Promise<BuilderResponse>, model: LLModel = "gpt-3.5-turbo") => {
     const patchBuilder = buildPatchPrompt;
     const filteredFiles = files.filter((file) => filterFile(file));
     filteredFiles.map((file) => {
@@ -293,7 +297,7 @@ export const reviewChanges = async (files: PRFile[], convoBuilder: (diff: string
 
     const feedbacks = await Promise.all(
         groups.map((patchGroup) => {
-            return reviewFiles(patchGroup, model, patchBuilder, convoBuilder);
+            return reviewFiles(traceTag, patchGroup, model, patchBuilder, convoBuilder);
         })
     );
     try {
@@ -305,7 +309,25 @@ export const reviewChanges = async (files: PRFile[], convoBuilder: (diff: string
     }
 }
 
-export const generateCodeSuggestions = async (files: PRFile[], model: LLModel = "gpt-3.5-turbo") => {
+export const generateInlineComments = async (traceTag: string, suggestion: PRSuggestion, file: PRFile, model: LLModel = "gpt-3.5-turbo"): Promise<CodeSuggestion> => {
+    try {
+        const convo = getInlineFixPrompt(file.current_contents, suggestion);
+        const fnResponse = await chatFns(traceTag, crypto.randomUUID(), convo, INLINE_FN, {"function_call": {"name": "fix"}});
+        const args = JSON.parse(fnResponse.choices[0].message.function_call.arguments);
+        return {
+            file: suggestion.filename,
+            line_start: args["lineStart"],
+            line_end: args["lineStart"],
+            correction: args["code"],
+            comment: args["comment"]
+        }
+    } catch (exc) {
+        console.log(exc);
+        return null;
+    }
+}
+
+export const generateCodeSuggestions = async (traceTag: string, files: PRFile[], model: LLModel = "gpt-3.5-turbo"): Promise<CodeSuggestion[]> => {
     const patchBuilder = buildSuggestionPrompt;
     const convoBuilder = getSuggestionPrompt;
     const filteredFiles = files.filter((file) => filterFile(file));
@@ -336,7 +358,7 @@ export const generateCodeSuggestions = async (files: PRFile[], model: LLModel = 
 
         const suggestions = await Promise.all(
             groups.map((patchGroup) => {
-                return reviewFiles(patchGroup, model, patchBuilder, convoBuilder);
+                return reviewFiles(traceTag, patchGroup, model, patchBuilder, convoBuilder);
             })
         );
         const codeSuggestions = suggestions.map((suggestion) => JSON.parse(suggestion)["corrections"]).flat(1);
@@ -349,26 +371,36 @@ export const generateCodeSuggestions = async (files: PRFile[], model: LLModel = 
 }
 
 const preprocessFile = async (octokit: Octokit, payload: WebhookEventMap["pull_request"], file: PRFile) => {
-    const branch: BranchDetails = {
+    const baseBranch: BranchDetails = {
         name: payload.pull_request.base.ref,
         sha: payload.pull_request.base.sha,
         url: payload.pull_request.url
     };
+    const currentBranch: BranchDetails = {
+        name: payload.pull_request.head.ref,
+        sha: payload.pull_request.head.sha,
+        url: payload.pull_request.url
+    };
     // Handle scenario where file does not exist!!
-    const contents = await getGitFile(octokit, payload, branch, file.filename);
-    if (contents.content == null) {
+    const [oldContents, currentContents] = await Promise.all([
+        getGitFile(octokit, payload, baseBranch, file.filename),
+        getGitFile(octokit, payload, currentBranch, file.filename)
+    ]);
+    if (oldContents.content == null || currentContents.content == null) {
         console.log(`New File: ${file.filename}`)
         file.old_contents = null
+        file.current_contents = null
     } else {
-        file.old_contents = String.raw`${contents.content}`;
+        file.old_contents = String.raw`${oldContents.content}`;
+        file.current_contents = String.raw`${currentContents.content}`;
     }
 }
 
-const reviewChangesRetry = async (files: PRFile[], builders: Builders[], model: LLModel = "gpt-3.5-turbo") => {
+const reviewChangesRetry = async (traceTag: string, files: PRFile[], builders: Builders[], model: LLModel = "gpt-3.5-turbo") => {
     for (const {convoBuilder, responseBuilder} of builders) {
         try {
             console.log(`Trying with convoBuilder: ${convoBuilder.name}.`);
-            return await reviewChanges(files, convoBuilder, responseBuilder, model);
+            return await reviewChanges(traceTag, files, convoBuilder, responseBuilder, model);
         } catch (error) {
             console.log(`Error with convoBuilder: ${convoBuilder.name}, trying next one. Error: ${error}`);
         }
@@ -377,6 +409,8 @@ const reviewChangesRetry = async (files: PRFile[], builders: Builders[], model: 
 }
 
 export const processPullRequest = async (octokit: Octokit, payload: WebhookEventMap["pull_request"], files: PRFile[], model: LLModel = "gpt-3.5-turbo", includeSuggestions = false) => {
+    const reviewTraceTag = `${payload.pull_request.id}-review`;
+    const inlineTraceTag = `${payload.pull_request.id}-inline`
     const filteredFiles = files.filter((file) => filterFile(file));
     if (filteredFiles.length == 0) {
         console.log("nothing to comment on")
@@ -392,21 +426,26 @@ export const processPullRequest = async (octokit: Octokit, payload: WebhookEvent
     const repoName = payload.repository.name;
     const curriedXMLResponseBuilder = curriedXmlResponseBuilder(owner, repoName);
     if (includeSuggestions) {
-        const [review, suggestions] = await Promise.all([
-            reviewChangesRetry(filteredFiles, [
+        const reviewComments = await reviewChangesRetry(reviewTraceTag, filteredFiles, [
                 {convoBuilder: getXMLReviewPrompt, responseBuilder: curriedXMLResponseBuilder},
                 {convoBuilder: getReviewPrompt, responseBuilder: basicResponseBuilder}
-            ], model),
-            generateCodeSuggestions(filteredFiles, model)
-        ]);
-
+            ], model);
+        let inlineComments: CodeSuggestion[] = [];
+        if (reviewComments.structuredComments.length == 0) {
+            console.log("STARTING INLINE COMMENT PROCESSING");
+            inlineComments = await Promise.all(
+                reviewComments.structuredComments.map((suggestion) => {
+                    return generateInlineComments(inlineTraceTag, suggestion, suggestion.filename, model);
+                })
+            );
+        }
         return {
-            review,
-            suggestions
-        };
+            review: reviewComments,
+            suggestions: inlineComments
+        }
     } else {
         const [review] = await Promise.all([
-            reviewChangesRetry(filteredFiles, [
+            reviewChangesRetry(reviewTraceTag, filteredFiles, [
                 {convoBuilder: getXMLReviewPrompt, responseBuilder: curriedXMLResponseBuilder},
                 {convoBuilder: getReviewPrompt, responseBuilder: basicResponseBuilder}
             ], model),

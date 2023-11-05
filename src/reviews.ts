@@ -1,4 +1,4 @@
-import { BranchDetails, CodeSuggestion, Review, processGitFilepath } from "./constants";
+import { BranchDetails, BuilderResponse, CodeSuggestion, Review, processGitFilepath } from "./constants";
 import { Octokit } from "@octokit/rest";
 import { WebhookEventMap } from "@octokit/webhooks-definitions/schema";
 
@@ -52,9 +52,11 @@ const postInlineComment = async (octokit: Octokit, payload: WebhookEventMap["pul
 }
 
 export const applyReview = async ({octokit, payload, review}: {octokit: Octokit, payload: WebhookEventMap["pull_request"], review: Review}) => {
+
     let commentPromise = null;
-    if (review.review != null) {
-        commentPromise = postGeneralReviewComment(octokit, payload, review.review);
+    const comment = review.review.comment;
+    if (comment != null) {
+        commentPromise = postGeneralReviewComment(octokit, payload, comment);
     }
     const suggestionPromises = review.suggestions.map((suggestion) => postInlineComment(octokit, payload, suggestion));
     await Promise.all([

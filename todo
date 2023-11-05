@@ -20,7 +20,6 @@ get general scope:
 - ignore new lines
 - hunks spanning multiple scopes
 - handle globabl scope
-- changes in far enough apart within a single function will result in multiple hunks... Merge overlapping function contexts
 
 more parsers (popularity):
 - py
@@ -34,6 +33,9 @@ upstream -> code change -> downstream
 
 
 Better prompt
+
+COMMENT BOT
+take suggestions from PR Bot
 
 Need to try catch suggestions
 Convert code suggestions into a proper function call
