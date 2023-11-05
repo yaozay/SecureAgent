@@ -309,18 +309,30 @@ export const reviewChanges = async (traceTag: string, files: PRFile[], convoBuil
     }
 }
 
+const indentCodeFix = (file: string, code: string, lineStart: number): string => {
+    const fileLines = file.split("\n");
+    const firstLine = fileLines[lineStart-1];
+    const codeLines = String.raw`${code}`.split("\n");
+    const indentation = firstLine.match(/^(\s*)/)[0];
+    const indentedCodeLines = codeLines.map(line => indentation + line);
+    return indentedCodeLines.join("\n");
+}
+
 export const generateInlineComments = async (traceTag: string, suggestion: PRSuggestion, file: PRFile, model: LLModel = "gpt-3.5-turbo"): Promise<CodeSuggestion> => {
     try {
         const convo = getInlineFixPrompt(file.current_contents, suggestion);
         const fnResponse = await chatFns(traceTag, crypto.randomUUID(), convo, INLINE_FN, {"function_call": {"name": "fix"}});
         const args = JSON.parse(fnResponse.choices[0].message.function_call.arguments);
-        return {
+        const initialCode = args["code"];
+        const indentedCode = indentCodeFix(file.current_contents, initialCode, args["lineStart"]);
+        const codeFix = {
             file: suggestion.filename,
             line_start: args["lineStart"],
-            line_end: args["lineStart"],
-            correction: args["code"],
+            line_end: args["lineEnd"],
+            correction: indentedCode,
             comment: args["comment"]
         }
+        return codeFix;
     } catch (exc) {
         console.log(exc);
         return null;
@@ -386,13 +398,17 @@ const preprocessFile = async (octokit: Octokit, payload: WebhookEventMap["pull_r
         getGitFile(octokit, payload, baseBranch, file.filename),
         getGitFile(octokit, payload, currentBranch, file.filename)
     ]);
-    if (oldContents.content == null || currentContents.content == null) {
-        console.log(`New File: ${file.filename}`)
-        file.old_contents = null
-        file.current_contents = null
-    } else {
+
+    if (oldContents.content != null) {
         file.old_contents = String.raw`${oldContents.content}`;
+    } else {
+        file.old_contents = null;
+    }
+
+    if (currentContents.content != null) {
         file.current_contents = String.raw`${currentContents.content}`;
+    } else {
+        file.current_contents = null;
     }
 }
 
@@ -431,17 +447,25 @@ export const processPullRequest = async (octokit: Octokit, payload: WebhookEvent
                 {convoBuilder: getReviewPrompt, responseBuilder: basicResponseBuilder}
             ], model);
         let inlineComments: CodeSuggestion[] = [];
-        if (reviewComments.structuredComments.length == 0) {
+        console.log("STRUCTURED COMMENTS LEN: ");
+        console.log(reviewComments.structuredComments.length);
+        if (reviewComments.structuredComments.length > 0) {
             console.log("STARTING INLINE COMMENT PROCESSING");
             inlineComments = await Promise.all(
                 reviewComments.structuredComments.map((suggestion) => {
-                    return generateInlineComments(inlineTraceTag, suggestion, suggestion.filename, model);
+                    // find relevant file
+                    const file = files.find(file => file.filename === suggestion.filename);
+                    if (file == null) {
+                        return null;
+                    }
+                    return generateInlineComments(inlineTraceTag, suggestion, file, model);
                 })
             );
         }
+        const filteredInlineComments = inlineComments = inlineComments.filter(comment => comment !== null);
         return {
             review: reviewComments,
-            suggestions: inlineComments
+            suggestions: filteredInlineComments
         }
     } else {
         const [review] = await Promise.all([

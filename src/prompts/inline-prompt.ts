@@ -1,22 +1,24 @@
 import { ChatMessage, PRSuggestion } from "../constants"
 
-export const INLINE_FIX_PROMPT = `In the following task, you are required to convert the given code suggestion into a valid code fix for the corresponding file content which is also provided. The original suggestion XML will be presented similar to this:
+export const INLINE_FIX_PROMPT = `In this task, you are provided with a code suggestion in XML format, along with the corresponding file content. Your task is to radiate from this suggestion and draft a precise code fix. Here's how your input will look:
 
 \`\`\`xml
-<suggestion>
-  <describe>Your Description Here</describe>
-  <type>Your Type Here</type>
-  <comment>Your Comment Here</comment>
-  <code>Your Code Here</code>
-  <filename>Your File Name Here</filename>
-</suggestion>
+  <suggestion>
+    <describe>Your Description Here</describe>
+    <type>Your Type Here</type>
+    <comment>Your Suggestions Here</comment>
+    <code>Original Code Here</code>
+    <filename>File Name Here</filename>
+  </suggestion>
 \`\`\`
 
-The "comment" field contains the specific request for code changes. Your task is to implement the change according to the suggestion's comment and then provide the code fix, considering the line number where the change was applied.
+{file}
 
-Remember, your code fix must be correct according to the suggestion, and the updated code must be functional, error-free and valid. It must be in the same language as the provided file.
+The 'comment' field contains specific code modification instructions. Based on these instructions, you're required to formulate a precise code fix. Bear in mind that the fix must include only the lines between the starting line (linestart) and ending line (lineend) where the changes are applied.
 
-Now, using the above instructions, please perform the required changes to the provided suggestion and file content.`
+The adjusted code doesn't necessarily need to be standalone valid code, but when incorporated into the corresponding file, it must result in valid, functional code, without errors. Ensure to include only the specific lines affected by the modifications. Avoid including placeholders such as 'rest of code...'
+
+Please interpret the given directions and apply the necessary changes to the provided suggestion and file content. Make the modifications unambiguous and appropriate for utilizing in an inline suggestion on GitHub.`
 
 export const INLINE_FN = [
     {
@@ -31,11 +33,15 @@ export const INLINE_FN = [
                 },
                 "code": {
                     "type": "string",
-                    "description": "The code fix to address the suggestion, which replace the specified lines"
+                    "description": "Modified Code Snippet"
                 },
                 "lineStart": {
                     "type": "number",
-                    "description": "Which line number the code changes should start on"
+                    "description": "Starting Line Number"
+                },
+                "lineEnd": {
+                    "type": "number",
+                    "description": "Ending Line Number"
                 }
             }
         },

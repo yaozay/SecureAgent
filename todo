@@ -34,8 +34,9 @@ upstream -> code change -> downstream
 
 Better prompt
 
-COMMENT BOT
+INLINE BOT
 take suggestions from PR Bot
+need to figure out indentation
 
 Need to try catch suggestions
 Convert code suggestions into a proper function call
