@@ -387,12 +387,12 @@ const preprocessFile = async (octokit: Octokit, payload: WebhookEventMap["pull_r
     const baseBranch: BranchDetails = {
         name: base.ref,
         sha: base.sha,
-        url: base.url
+        url: payload.pull_request.url
     };
     const currentBranch: BranchDetails = {
         name: head.ref,
         sha: head.sha,
-        url: head.url
+        url: payload.pull_request.url
     };
     // Handle scenario where file does not exist!!
     const [oldContents, currentContents] = await Promise.all([
@@ -448,8 +448,6 @@ export const processPullRequest = async (octokit: Octokit, payload: WebhookEvent
                 {convoBuilder: getReviewPrompt, responseBuilder: basicResponseBuilder}
             ], model);
         let inlineComments: CodeSuggestion[] = [];
-        console.log("STRUCTURED COMMENTS LEN: ");
-        console.log(reviewComments.structuredComments.length);
         if (reviewComments.structuredComments.length > 0) {
             console.log("STARTING INLINE COMMENT PROCESSING");
             inlineComments = await Promise.all(
