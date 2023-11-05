@@ -383,15 +383,16 @@ export const generateCodeSuggestions = async (traceTag: string, files: PRFile[],
 }
 
 const preprocessFile = async (octokit: Octokit, payload: WebhookEventMap["pull_request"], file: PRFile) => {
+    const { base, head } = payload.pull_request;
     const baseBranch: BranchDetails = {
-        name: payload.pull_request.base.ref,
-        sha: payload.pull_request.base.sha,
-        url: payload.pull_request.url
+        name: base.ref,
+        sha: base.sha,
+        url: base.url
     };
     const currentBranch: BranchDetails = {
-        name: payload.pull_request.head.ref,
-        sha: payload.pull_request.head.sha,
-        url: payload.pull_request.url
+        name: head.ref,
+        sha: head.sha,
+        url: head.url
     };
     // Handle scenario where file does not exist!!
     const [oldContents, currentContents] = await Promise.all([
