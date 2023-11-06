@@ -169,11 +169,8 @@ const assignLineNumbers = (diff: string) => {
       const match = line.match(/@@ -\d+,\d+ \+(\d+),\d+ @@/);
       newLine = parseInt(match[1]);
       lineNumbers.push(line); // keep chunk headers as is
-    } else if (line.startsWith('+')) {
-      // This is a line from the new file.
-      lineNumbers.push(`${newLine++}: ${line}`);
     } else if (!line.startsWith('-')) {
-      // This is a line that is the same in both files.
+      // This is a line from the new file.
       lineNumbers.push(`${newLine++}: ${line}`);
     }
   }

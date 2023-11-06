@@ -16,11 +16,17 @@ export interface PRFile {
     previous_filename?: string;
     patchTokenLength?: number;
     old_contents?: string;
+    current_contents?: string;
 };
+
+export interface BuilderResponse {
+    comment: string;
+    structuredComments: any[]
+}
 
 export interface Builders {
     convoBuilder: (diff: string) => ChatMessage[];
-    responseBuilder: (feedbacks: string[]) => Promise<string>;
+    responseBuilder: (feedbacks: string[]) => Promise<BuilderResponse>;
 }
 
 export interface PatchInfo {
@@ -55,7 +61,7 @@ export interface ChatMessage {
 }
 
 export interface Review {
-    review: string;
+    review: BuilderResponse;
     suggestions: CodeSuggestion[];
 }
 

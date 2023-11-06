@@ -1,4 +1,4 @@
-import { BranchDetails, CodeSuggestion, Review, processGitFilepath } from "./constants";
+import { BranchDetails, BuilderResponse, CodeSuggestion, Review, processGitFilepath } from "./constants";
 import { Octokit } from "@octokit/rest";
 import { WebhookEventMap } from "@octokit/webhooks-definitions/schema";
 
@@ -20,14 +20,13 @@ const postGeneralReviewComment = async (octokit: Octokit, payload: WebhookEventM
 }
 
 const postInlineComment = async (octokit: Octokit, payload: WebhookEventMap["pull_request"], suggestion: CodeSuggestion) => {
-    console.log(suggestion);
     try {
         const line = suggestion.line_end
         let startLine = null;
         if (suggestion.line_end != suggestion.line_start) {
             startLine = suggestion.line_start;
         }
-        const suggestionBody = `\`\`\`suggestion\n${suggestion.correction}`;
+        const suggestionBody = `${suggestion.comment}\n\`\`\`suggestion\n${suggestion.correction}`;
 
         await octokit.request('POST /repos/{owner}/{repo}/pulls/{pull_number}/comments', {
             owner: payload.repository.owner.login,
@@ -53,8 +52,9 @@ const postInlineComment = async (octokit: Octokit, payload: WebhookEventMap["pul
 
 export const applyReview = async ({octokit, payload, review}: {octokit: Octokit, payload: WebhookEventMap["pull_request"], review: Review}) => {
     let commentPromise = null;
-    if (review.review != null) {
-        commentPromise = postGeneralReviewComment(octokit, payload, review.review);
+    const comment = review.review.comment;
+    if (comment != null) {
+        commentPromise = postGeneralReviewComment(octokit, payload, comment);
     }
     const suggestionPromises = review.suggestions.map((suggestion) => postInlineComment(octokit, payload, suggestion));
     await Promise.all([

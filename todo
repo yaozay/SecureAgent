@@ -8,10 +8,6 @@ npx smee -u https://smee.io/MF6U75MXyDtxZVI -t http://localhost:3000/api/code
 
 PR BOT
 
-Inline Comments in the pr - PENDING
-- files with multiple chunk headers
-log files that are too large.
-
 in memory context cache
 
 get the function for the hunk and use that as general context
@@ -20,7 +16,6 @@ get general scope:
 - ignore new lines
 - hunks spanning multiple scopes
 - handle globabl scope
-- changes in far enough apart within a single function will result in multiple hunks... Merge overlapping function contexts
 
 more parsers (popularity):
 - py
@@ -35,8 +30,16 @@ upstream -> code change -> downstream
 
 Better prompt
 
-Need to try catch suggestions
-Convert code suggestions into a proper function call
+INLINE BOT
+take suggestions from PR Bot
+need to figure out indentation
+
+
+Inline Comments in the pr - PENDING
+- files with multiple chunk headers
+log files that are too large.
+
+sometimes lines are off?
 
 
 CODE BOT
