@@ -312,7 +312,7 @@ export const reviewChanges = async (traceTag: string, files: PRFile[], convoBuil
 const indentCodeFix = (file: string, code: string, lineStart: number): string => {
     const fileLines = file.split("\n");
     const firstLine = fileLines[lineStart-1];
-    const codeLines = String.raw`${code}`.split("\n");
+    const codeLines = code.split("\n");
     const indentation = firstLine.match(/^(\s*)/)[0];
     const indentedCodeLines = codeLines.map(line => indentation + line);
     return indentedCodeLines.join("\n");
@@ -323,7 +323,7 @@ export const generateInlineComments = async (traceTag: string, suggestion: PRSug
         const convo = getInlineFixPrompt(file.current_contents, suggestion);
         const fnResponse = await chatFns(traceTag, crypto.randomUUID(), convo, INLINE_FN, {"function_call": {"name": "fix"}});
         const args = JSON.parse(fnResponse.choices[0].message.function_call.arguments);
-        const initialCode = args["code"];
+        const initialCode = String.raw`${args["code"]}`;
         const indentedCode = indentCodeFix(file.current_contents, initialCode, args["lineStart"]);
         const codeFix = {
             file: suggestion.filename,

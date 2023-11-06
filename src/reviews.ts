@@ -20,14 +20,13 @@ const postGeneralReviewComment = async (octokit: Octokit, payload: WebhookEventM
 }
 
 const postInlineComment = async (octokit: Octokit, payload: WebhookEventMap["pull_request"], suggestion: CodeSuggestion) => {
-    console.log(suggestion);
     try {
         const line = suggestion.line_end
         let startLine = null;
         if (suggestion.line_end != suggestion.line_start) {
             startLine = suggestion.line_start;
         }
-        const suggestionBody = `\`\`\`suggestion\n${suggestion.correction}`;
+        const suggestionBody = `${suggestion.comment}\n\`\`\`suggestion\n${suggestion.correction}`;
 
         await octokit.request('POST /repos/{owner}/{repo}/pulls/{pull_number}/comments', {
             owner: payload.repository.owner.login,
