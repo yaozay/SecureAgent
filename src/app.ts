@@ -5,7 +5,7 @@ import { createNodeMiddleware } from "@octokit/webhooks";
 import * as http from "http";
 import { Octokit } from "@octokit/rest";
 import { WebhookEvent, WebhookEventMap } from "@octokit/webhooks-definitions/schema";
-import { generateCodeSuggestions, logPRInfo, processPullRequest, reviewChanges, reviewDiff } from "./review-agent";
+import { logPRInfo, processPullRequest, reviewChanges, reviewDiff } from "./review-agent";
 import { applyReview } from "./reviews";
 import { Review } from "./constants";
 import { processTask } from "./agents/coder";
@@ -97,12 +97,12 @@ export const getCodeTree = async ({octokit, payload}: {octokit: Octokit, payload
 // This adds an event handler that your code will call later. When this event handler is called, it will log the event to the console. Then, it will use GitHub's REST API to add a comment to the pull request that triggered the event.
 async function handlePullRequestOpened({octokit, payload}: {octokit: Octokit, payload: WebhookEventMap["pull_request"]}) {
   console.log(`Received a pull request event for #${payload.pull_request.number}`);
-  const reposWithInlineEnabled = new Set<number>([601904706, 701925328]);
-  const canInlineSuggest = reposWithInlineEnabled.has(payload.repository.id);
+  // const reposWithInlineEnabled = new Set<number>([601904706, 701925328]);
+  // const canInlineSuggest = reposWithInlineEnabled.has(payload.repository.id);
   try {
     logPRInfo(payload);
     const files = await getChangesPerFile(payload);
-    const review: Review = await processPullRequest(octokit, payload, files, "gpt-4", canInlineSuggest);
+    const review: Review = await processPullRequest(octokit, payload, files, "gpt-4", true);
     await applyReview({octokit, payload, review})
     console.log("Review Submitted");
   } catch (exc) {

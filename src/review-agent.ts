@@ -339,48 +339,6 @@ export const generateInlineComments = async (traceTag: string, suggestion: PRSug
     }
 }
 
-export const generateCodeSuggestions = async (traceTag: string, files: PRFile[], model: LLModel = "gpt-3.5-turbo"): Promise<CodeSuggestion[]> => {
-    const patchBuilder = buildSuggestionPrompt;
-    const convoBuilder = getSuggestionPrompt;
-    const filteredFiles = files.filter((file) => filterFile(file));
-    filteredFiles.map((file) => {
-        file.patchTokenLength = getTokenLength(patchBuilder(file));
-    });
-    // further subdivide if necessary, maybe group files by common extension?
-    const patchesWithinModelLimit: PRFile[] = [];
-    // these single file patches are larger than the full model context
-    const patchesOutsideModelLimit: PRFile[] = [];
-    
-    filteredFiles.forEach((file) => {
-        const patchWithPromptWithinLimit = isConversationWithinLimit(constructPrompt([file], patchBuilder, convoBuilder), model);
-        if (patchWithPromptWithinLimit) {
-            patchesWithinModelLimit.push(file);
-        } else {
-            patchesOutsideModelLimit.push(file);
-        }
-    });
-    try {
-        console.log(`files within limits: ${patchesWithinModelLimit.length}`);
-        const withinLimitsPatchGroups = processWithinLimitFiles(patchesWithinModelLimit, model, patchBuilder, convoBuilder);
-        const exceedingLimitsPatchGroups = processOutsideLimitFiles(patchesOutsideModelLimit, model, patchBuilder, convoBuilder);
-        console.log(`${withinLimitsPatchGroups.length} within limits groups.`)
-        console.log(`${patchesOutsideModelLimit.length} files outside limit, skipping them.`)
-
-        const groups = [...withinLimitsPatchGroups, ...exceedingLimitsPatchGroups];
-
-        const suggestions = await Promise.all(
-            groups.map((patchGroup) => {
-                return reviewFiles(traceTag, patchGroup, model, patchBuilder, convoBuilder);
-            })
-        );
-        const codeSuggestions = suggestions.map((suggestion) => JSON.parse(suggestion)["corrections"]).flat(1);
-        const postProcess = postProcessCodeSuggestions(codeSuggestions);
-        return postProcess;
-    } catch (exc) {
-        console.log(exc);
-        return [];
-    }
-}
 
 const preprocessFile = async (octokit: Octokit, payload: WebhookEventMap["pull_request"], file: PRFile) => {
     const { base, head } = payload.pull_request;
