@@ -9,3 +9,4 @@ review-agent-test-pk.pem
 src/test.ts
 src/test-files.ts
 src/tests
+src/scripts
