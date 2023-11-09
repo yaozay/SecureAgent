@@ -77,7 +77,7 @@ export const reviewFiles = async (traceTag: string, files: PRFile[], model: LLMo
 
 const filterFile = (file: PRFile) => {
     const extensionsToIgnore = new Set<string>(["pdf", "png", "jpg", "jpeg", "gif", "mp4", "mp3"])
-const filesToIgnore = new Set<string>(["package-lock.json", "yarn.lock", ".gitignore", "package.json", "tsconfig.json"]);
+    const filesToIgnore = new Set<string>(["package-lock.json", "yarn.lock", ".gitignore", "package.json", "tsconfig.json"]);
     if (filesToIgnore.has(file.filename.toLowerCase())) {
         return false;
     }
