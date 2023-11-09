@@ -52,7 +52,7 @@ const postInlineComment = async (octokit: Octokit, payload: WebhookEventMap["pul
 
 export const applyReview = async ({octokit, payload, review}: {octokit: Octokit, payload: WebhookEventMap["pull_request"], review: Review}) => {
     let commentPromise = null;
-    const comment = review.review.comment;
+    const comment = review.review?.comment;
     if (comment != null) {
         commentPromise = postGeneralReviewComment(octokit, payload, comment);
     }

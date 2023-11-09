@@ -23,6 +23,7 @@
     "@types/babel__traverse": "^7.20.3",
     "@types/diff": "^5.0.7",
     "@types/xml2js": "^0.4.13",
+    "csv-writer": "^1.6.0",
     "smee-client": "^1.2.3",
     "typescript": "^5.2.2"
   },
