@@ -1,3 +1,4 @@
+import { PRSuggestionClass } from '../classes/PRSuggestionClass';
 import { ChatMessage, PRSuggestion } from "../constants"
 
 export const INLINE_FIX_PROMPT = `In this task, you are provided with a code suggestion in XML format, along with the corresponding file content. Your task is to radiate from this suggestion and draft a precise code fix. Here's how your input will look:
