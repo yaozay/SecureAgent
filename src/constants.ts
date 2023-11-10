@@ -1,4 +1,5 @@
 import { Node } from "@babel/traverse";
+import { JavascriptParser } from "./context/language/javascript-parser";
 
 export type LLModel = "gpt-3.5-turbo" | "gpt-4";
 
@@ -86,4 +87,28 @@ export interface EnclosingContext {
 
 export interface AbstractParser {
     findEnclosingContext(file: string, lineStart: number, lineEnd: number): EnclosingContext;
+    dryRun(file: string): { valid: boolean, error: string };
+}
+
+const EXTENSIONS_TO_PARSERS: Map<string, AbstractParser> = new Map([
+    ['ts', new JavascriptParser()],
+    ['tsx', new JavascriptParser()],
+    ['js', new JavascriptParser()],
+    ['jsx', new JavascriptParser()]
+]);
+
+export const getParserForExtension = (filename: string) => {
+    const fileExtension = filename.split('.').pop().toLowerCase();
+    return EXTENSIONS_TO_PARSERS.get(fileExtension) || null;
+}
+
+export const assignLineNumbers = (contents: string): string => {
+    const lines = contents.split("\n");
+    let lineNumber = 1;
+    const linesWithNumbers = lines.map(line => {
+        const numberedLine = `${lineNumber}: ${line}`;
+        lineNumber++;
+        return numberedLine;
+    });
+    return linesWithNumbers.join('\n');
 }

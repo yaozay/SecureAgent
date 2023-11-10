@@ -156,7 +156,7 @@ export const COMBINED_FNS = [
                 },
                 "nextStep": {
                     "type": "string",
-                    "description": "action == edit || action == open. The next part of the plan to achieve the goal."
+                    "description": "action == edit || action == open || action == done. The next part of the plan to achieve the goal, can be null if nothing else to do."
                 },
                 "goal": {
                     "type": "string",
@@ -182,7 +182,7 @@ export const editFnStr = (mode: string, filepath: string, code: string, lineStar
 }
 
 export const doneFnStr = (goal: string) => {
-    return `calling doen with args: ${goal}`;
+    return `calling done with args: ${goal}`;
 }
 
 
@@ -208,7 +208,7 @@ export const LLM_FUNCTION_MAP = new Map<string, FunctionMapType>([
         "edit",
         {
             fn: editFileContents,
-            fnArgs: ["octokit", "payload", "branch", "mode", "filepath", "code", "lineStart"],
+            fnArgs: ["octokit", "payload", "branch", "sessionId", "mode", "filepath", "code", "lineStart"],
             fnStr: editFnStr,
             fnStrArgs: ["mode", "filepath", "code", "lineStart"]
         }

@@ -175,6 +175,8 @@ const runStep = async (sessionId: string, goal: string, tasks: string[], convo: 
                 passingArgs.push(payload);
             } else if (arg == "branch") {
                 passingArgs.push(branch);
+            } else if (arg == "sessionId") {
+                passingArgs.push(sessionId);
             } else {
                 passingArgs.push(functionArgs[arg]);
             }
@@ -237,8 +239,11 @@ export const processTask = async (goal: string, tree: string, octokit: Octokit, 
             convo.push({"role": "assistant", "content": functionString});
             convo.push({"role": "user", "content": `${result}\n\nNext Step: ${nextStep}`});
             if (functionName == "done") {
-                console.log("GOAL COMPLETED");
-                break;
+                console.log(`CALLING DONE with ${nextStep}`);
+                if (nextStep == null || actions[actions.length-1][0] == "done") { // and the previous action was done
+                    console.log("GOAL COMPLETED");
+                    break;
+                }
             }
         } catch (exc) {
             console.log(exc);
@@ -249,7 +254,6 @@ export const processTask = async (goal: string, tree: string, octokit: Octokit, 
         await sleep(5000);
         stepCount += 1;
     }
-    console.log(convo);
     await commentIssue(octokit, payload, "Finished Processing")
     console.log("DONE PROCESSING");
     

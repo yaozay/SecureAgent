@@ -1,6 +1,7 @@
 import { BranchDetails, BuilderResponse, CodeSuggestion, Review, processGitFilepath } from "./constants";
 import { Octokit } from "@octokit/rest";
 import { WebhookEventMap } from "@octokit/webhooks-definitions/schema";
+import { executeEdit } from "./executors/editor";
 
 
 const postGeneralReviewComment = async (octokit: Octokit, payload: WebhookEventMap["pull_request"], review: string) => {
@@ -156,67 +157,40 @@ export const createBranch = async (octokit: Octokit, payload: WebhookEventMap["i
     return branchDetails;
 }
 
-const overwriteFileLines = (contents: string, code: string, lineStart: number) => {
-    let lines = contents.split('\n');
-    const codeLines = code.split('\n').filter((line) => line.length > 0);
-    lines.splice(lineStart <= 0 ? 0 : lineStart - 1, codeLines.length, ...codeLines);
-    return lines;
-}
-
-const insertFileLines = (contents: string, code: string, lineStart: number) => {
-    const lines = contents.split("\n");
-    const codeLines = code.split("\n");
-    lines.splice(lineStart <= 0 ? 0 : lineStart - 1, 0, ...codeLines);
-    return lines;
-}
-
-export const editFileContents = async (octokit: Octokit, payload: WebhookEventMap["issues"], branch: BranchDetails, mode: string, filepath: string, code: string, lineStart: number) => {
+export const editFileContents = async (octokit: Octokit, payload: WebhookEventMap["issues"], branch: BranchDetails, sessionId: string, mode: string, filepath: string, code: string, lineStart: number) => {
     if (lineStart === undefined) {
         lineStart = 0;
     }
-    try {
-        let fileContent = await getGitFile(octokit, payload, branch, processGitFilepath(filepath))
-        const rawContents = String.raw`${fileContent.content || ""}`;
-        const rawCode = String.raw`${code}`;
+    let fileContent = await getGitFile(octokit, payload, branch, processGitFilepath(filepath))
+    const rawContents = String.raw`${fileContent.content || ""}`;
+    const rawCode = String.raw`${code}`;
 
-        let updatedLines: string[] = [];
-        if (mode == "insert") {
-            updatedLines = insertFileLines(rawContents, rawCode, lineStart);
-        } else if (mode == "overwrite") {
-            updatedLines = overwriteFileLines(rawContents, rawCode, lineStart);
-        } else {
-            const err = `Unsupported file edit mode: ${mode}`;
-            throw new Error(err);
-        }
-        const updatedContent = updatedLines.join('\n');
-        const encodedContent = Buffer.from(updatedContent).toString('base64');
+    const updatedContent = await executeEdit(sessionId, mode, filepath, rawContents, rawCode, lineStart);
+    const encodedContent = Buffer.from(updatedContent).toString('base64');
 
-        // Commit the changes to the branch
-        const commitResponse = await octokit.rest.repos.createOrUpdateFileContents({
-            owner: payload.repository.owner.login,
-            repo: payload.repository.name,
-            path: filepath,
-            message: `Edit ${filepath}`,
-            content: encodedContent,
-            sha: fileContent.sha,
-            branch: branch.name
-        });
+    // Commit the changes to the branch
+    const commitResponse = await octokit.rest.repos.createOrUpdateFileContents({
+        owner: payload.repository.owner.login,
+        repo: payload.repository.name,
+        path: filepath,
+        message: `Edit ${filepath}`,
+        content: encodedContent,
+        sha: fileContent.sha,
+        branch: branch.name
+    });
 
-        console.log(`Edited file: ${filepath}`);
+    console.log(`Edited file: ${filepath}`);
 
-        // Get the diff between the current branch and the default branch
-        const compareResponse = await octokit.rest.repos.compareCommits({
-            owner: payload.repository.owner.login,
-            repo: payload.repository.name,
-            base: payload.repository.default_branch,
-            head: branch.name
-        });
+    // Get the diff between the current branch and the default branch
+    const compareResponse = await octokit.rest.repos.compareCommits({
+        owner: payload.repository.owner.login,
+        repo: payload.repository.name,
+        base: payload.repository.default_branch,
+        head: branch.name
+    });
 
-        // Filter the files to get the diff for the specific file
-        const fileDiff = compareResponse.data.files.find(file => file.filename === filepath)?.patch;
+    // Filter the files to get the diff for the specific file
+    const fileDiff = compareResponse.data.files.find(file => file.filename === filepath)?.patch;
 
-        return { result: `Successfully edited file: ${filepath}`, functionString: `Editing file: ${filepath} with ${code}. Diff after commit:\n${fileDiff}`}
-    } catch (exc) {
-        console.log(exc);
-    }
+    return { result: `Successfully edited file: ${filepath}`, functionString: `Editing file: ${filepath} with ${code}. Diff after commit:\n${fileDiff}`}
 }
