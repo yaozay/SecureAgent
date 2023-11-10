@@ -1,4 +1,3 @@
-import { PRSuggestionClass } from '../classes/PRSuggestionClass';
 import { ChatMessage, PRSuggestion } from "../constants"
 
 export const INLINE_FIX_PROMPT = `In this task, you are provided with a code suggestion in XML format, along with the corresponding file content. Your task is to radiate from this suggestion and draft a precise code fix. Here's how your input will look:
@@ -65,18 +64,8 @@ const assignFullLineNumers = (contents: string): string => {
     return linesWithNumbers.join('\n');
 }
 
-const convertPRSuggestionToString = (suggestion: PRSuggestion): string => {
-    return `<suggestion>
-    <describe>${suggestion.describe}</describe>
-    <type>${suggestion.type}</type>
-    <comment>${suggestion.comment}</comment>
-    <code>${suggestion.code}</code>
-    <filename>${suggestion.filename}</filename>
-</suggestion>`;
-}
-
 export const getInlineFixPrompt = (fileContents: string, suggestion: PRSuggestion): ChatMessage[] => {
-    const userMessage = INLINE_USER_MESSAGE_TEMPLATE.replace("{SUGGESTION}", convertPRSuggestionToString(suggestion)).replace("{FILE}", assignFullLineNumers(fileContents));
+    const userMessage = INLINE_USER_MESSAGE_TEMPLATE.replace("{SUGGESTION}", suggestion.toString()).replace("{FILE}", assignFullLineNumers(fileContents));
     return [
         { role: "system", content: INLINE_FIX_PROMPT },
         { role: "user", content: userMessage}

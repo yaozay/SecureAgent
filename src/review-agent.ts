@@ -10,6 +10,7 @@ import * as crypto from 'crypto';
 import * as xml2js from "xml2js";
 import { INLINE_FN, getInlineFixPrompt } from './prompts/inline-prompt';
 import { chatFns } from './llms/chat';
+import { PRSuggestionImpl } from './data/PRSuggestionClass';
 
 interface PRLogEvent {
     id: number;
@@ -202,13 +203,7 @@ const processXMLSuggestions = async (feedbacks: string[]) => {
         lines[lines.length-1] = lines[lines.length-1].trim()
         const code = lines.join("\n")
 
-        return {
-            describe: rawSuggestion.describe[0],
-            type: rawSuggestion.type[0],
-            comment: rawSuggestion.comment[0],
-            code: code,
-            filename: rawSuggestion.filename[0]
-        } as PRSuggestion;
+        return new PRSuggestionImpl(rawSuggestion.describe[0], rawSuggestion.type[0], rawSuggestion.comment[0], code, rawSuggestion.filename[0]);
     });
     return suggestions;
 }
