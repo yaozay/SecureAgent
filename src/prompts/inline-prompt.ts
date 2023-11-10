@@ -64,18 +64,8 @@ const assignFullLineNumers = (contents: string): string => {
     return linesWithNumbers.join('\n');
 }
 
-const convertPRSuggestionToString = (suggestion: PRSuggestion): string => {
-    return `<suggestion>
-    <describe>${suggestion.describe}</describe>
-    <type>${suggestion.type}</type>
-    <comment>${suggestion.comment}</comment>
-    <code>${suggestion.code}</code>
-    <filename>${suggestion.filename}</filename>
-</suggestion>`;
-}
-
 export const getInlineFixPrompt = (fileContents: string, suggestion: PRSuggestion): ChatMessage[] => {
-    const userMessage = INLINE_USER_MESSAGE_TEMPLATE.replace("{SUGGESTION}", convertPRSuggestionToString(suggestion)).replace("{FILE}", assignFullLineNumers(fileContents));
+    const userMessage = INLINE_USER_MESSAGE_TEMPLATE.replace("{SUGGESTION}", suggestion.toString()).replace("{FILE}", assignFullLineNumers(fileContents));
     return [
         { role: "system", content: INLINE_FIX_PROMPT },
         { role: "user", content: userMessage}

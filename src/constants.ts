@@ -46,6 +46,7 @@ export interface PRSuggestion {
     comment: string;
     code: string;
     filename: string;
+    toString: () => string;
 }
 
 export interface CodeSuggestion {
