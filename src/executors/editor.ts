@@ -60,7 +60,7 @@ export const executeEdit = async (sessionId: string, mode: string, fileName: str
     }
     // throw if parser result is still invalid
     if (!parserResult.valid) {
-        throw parserResult.error;
+        throw new Error(parserResult.error);
     }
     return updatedContent;
 }
