@@ -78,7 +78,8 @@ export const reviewFiles = async (traceTag: string, files: PRFile[], model: LLMo
 const filterFile = (file: PRFile) => {
     const extensionsToIgnore = new Set<string>(["pdf", "png", "jpg", "jpeg", "gif", "mp4", "mp3"])
     const filesToIgnore = new Set<string>(["package-lock.json", "yarn.lock", ".gitignore", "package.json", "tsconfig.json"]);
-    if (filesToIgnore.has(file.filename.toLowerCase())) {
+    const filename = file.filename.toLowerCase().split('/').pop();
+    if (filename && filesToIgnore.has(filename)) {
         return false;
     }
     const splitFilename = file.filename.toLowerCase().split('.');
@@ -89,7 +90,6 @@ const filterFile = (file: PRFile) => {
     if (extension && extensionsToIgnore.has(extension)) {
         return false;
     }
-
     return true;
 }
 
