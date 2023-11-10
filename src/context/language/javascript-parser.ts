@@ -35,5 +35,23 @@ export class JavascriptParser implements AbstractParser {
             enclosingContext: largestEnclosingContext
         } as EnclosingContext;
     }
+    
+    dryRun(file: string): { valid: boolean; error: string; } {
+        try {
+            const ast = parser.parse(file, {
+                sourceType: 'module',
+                plugins: ['jsx', 'typescript'], // To allow JSX and TypeScript
+            });
+            return {
+                valid: true,
+                error: ""
+            };
+        } catch (exc) {
+            return {
+                valid: false,
+                error: exc
+            };
+        }
+    }
 }
 

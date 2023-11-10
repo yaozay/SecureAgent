@@ -1,20 +1,7 @@
-import { AbstractParser, PRFile, PatchInfo } from "../constants";
+import { AbstractParser, PRFile, PatchInfo, getParserForExtension } from "../constants";
 import * as diff from 'diff';
 import { JavascriptParser } from "./language/javascript-parser";
 import { Node } from "@babel/traverse";
-
-
-const EXTENSIONS_TO_PARSERS: Map<string, AbstractParser> = new Map([
-    ['ts', new JavascriptParser()],
-    ['tsx', new JavascriptParser()],
-    ['js', new JavascriptParser()],
-    ['jsx', new JavascriptParser()]
-]);
-
-const getParserForExtension = (filename: string) => {
-    const fileExtension = filename.split('.').pop().toLowerCase();
-    return EXTENSIONS_TO_PARSERS.get(fileExtension) || null;
-}
 
 const expandHunk = (contents: string, hunk: diff.Hunk, linesAbove: number = 5, linesBelow: number = 5) => {
     const fileLines = contents.split("\n");
