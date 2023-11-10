@@ -10,7 +10,7 @@ import * as crypto from 'crypto';
 import * as xml2js from "xml2js";
 import { INLINE_FN, getInlineFixPrompt } from './prompts/inline-prompt';
 import { chatFns } from './llms/chat';
-import { PRSuggestionImpl } from './data/PRSuggestionClass';
+import { PRSuggestionImpl } from './data/PRSuggestionImpl';
 
 interface PRLogEvent {
     id: number;

@@ -16,13 +16,15 @@ export class PRSuggestionImpl implements PRSuggestion {
     }
 
     toString(): string {
-        let xmlString = `<suggestion>`;
-        xmlString += `	<describe>${this.describe}</describe>`;
-        xmlString += `	<type>${this.type}</type>`;
-        xmlString += `	<comment>${this.comment}</comment>`;
-        xmlString += `	<code>${this.code}</code>`;
-        xmlString += `	<filename>${this.filename}</filename>`;
-        xmlString += `</suggestion>`;
-        return xmlString;
+        const xmlElements = [
+            `<suggestion>`,
+            `  <describe>${this.describe}</describe>`,
+            `  <type>${this.type}</type>`,
+            `  <comment>${this.comment}</comment>`,
+            `  <code>${this.code}</code>`,
+            `  <filename>${this.filename}</filename>`,
+            `</suggestion>`
+        ];
+        return xmlElements.join('\n');
     }
 }
