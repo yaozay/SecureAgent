@@ -24,7 +24,7 @@ const executeRepair = (mode: string, fileContents: string, code: string, lineSta
         updatedLines = overwriteFileLines(fileContents, code, lineStart);
     } else {
         const err = `Unsupported file edit mode: ${mode}`;
-        throw new Error(err);
+        throw new Error(`Unsupported file edit mode: ${mode}`);
     }
     return updatedLines.join("\n");
 }
