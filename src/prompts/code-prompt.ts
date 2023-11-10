@@ -182,7 +182,7 @@ export const editFnStr = (mode: string, filepath: string, code: string, lineStar
 }
 
 export const doneFnStr = (goal: string) => {
-    return `calling done with args: ${goal}`;
+    return `calling done with args: ${goal}.\nThis signifies that the entire goal has been achieved and no further action will be taken.`;
 }
 
 
