@@ -7,6 +7,10 @@ Code Agent:
 npx smee -u https://smee.io/MF6U75MXyDtxZVI -t http://localhost:3000/api/code
 
 PR BOT
+Make sure the suggested comment is not repeating the change
+construct file diffs in the right order
+(imports appearing at the end)
+make sure unique comments, (hash xml strs)
 
 in memory context cache
 
@@ -31,11 +35,9 @@ upstream -> code change -> downstream
 Better prompt
 
 INLINE BOT
-take suggestions from PR Bot
 need to figure out indentation
+the comments are not different than the code!
 
-
-Inline Comments in the pr - PENDING
 - files with multiple chunk headers
 log files that are too large.
 
