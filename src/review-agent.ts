@@ -77,8 +77,8 @@ export const reviewFiles = async (traceTag: string, files: PRFile[], model: LLMo
 }
 
 const filterFile = (file: PRFile) => {
-const extensionsToIgnore = new Set<string>(["pdf", "png", "jpg", "jpeg", "gif", "mp4", "mp3", "md", "json", "env", "toml"])
-const filesToIgnore = new Set<string>(["package-lock.json", "yarn.lock", ".gitignore", "package.json", "tsconfig.json", "poetry.lock", "readme.md"]);
+    const extensionsToIgnore = new Set<string>(["pdf", "png", "jpg", "jpeg", "gif", "mp4", "mp3", "md", "json", "env", "toml", "svg"])
+    const filesToIgnore = new Set<string>(["package-lock.json", "yarn.lock", ".gitignore", "package.json", "tsconfig.json", "poetry.lock", "readme.md"]);
     const filename = file.filename.toLowerCase().split('/').pop();
     if (filename && filesToIgnore.has(filename)) {
         return false;
@@ -313,6 +313,15 @@ const indentCodeFix = (file: string, code: string, lineStart: number): string =>
     return indentedCodeLines.join("\n");
 }
 
+const isCodeSuggestionNew = (contents: string, suggestion: CodeSuggestion): boolean => {
+    const fileLines = contents.split("\n");
+    const targetLines = fileLines.slice(suggestion.line_start - 1, suggestion.line_end).join("\n");
+    if (targetLines.trim() == suggestion.correction.trim()) { // same as existing code.
+        return false;
+    }
+    return true;
+}
+
 export const generateInlineComments = async (traceTag: string, suggestion: PRSuggestion, file: PRFile, model: LLModel = "gpt-3.5-turbo"): Promise<CodeSuggestion> => {
     try {
         const convo = getInlineFixPrompt(file.current_contents, suggestion);
@@ -327,7 +336,10 @@ export const generateInlineComments = async (traceTag: string, suggestion: PRSug
             correction: indentedCode,
             comment: args["comment"]
         }
-        return codeFix;
+        if (isCodeSuggestionNew(file.current_contents, codeFix)) {
+            return codeFix;
+        }
+        return null;
     } catch (exc) {
         console.log(exc);
         return null;
@@ -414,7 +426,7 @@ export const processPullRequest = async (octokit: Octokit, payload: WebhookEvent
                 })
             );
         }
-        const filteredInlineComments = inlineComments = inlineComments.filter(comment => comment !== null);
+        const filteredInlineComments = inlineComments.filter(comment => comment !== null);
         return {
             review: reviewComments,
             suggestions: filteredInlineComments
