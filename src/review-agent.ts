@@ -1,11 +1,10 @@
 import OpenAI from 'openai';
-import { PR_SUGGESTION_TEMPLATE, buildPatchPrompt, buildSuggestionPrompt, constructPrompt, getModelTokenLimit, getReviewPrompt, getSuggestionPrompt, getTokenLength, getXMLReviewPrompt, isConversationWithinLimit, postProcessCodeSuggestions, withinModelTokenLimit } from './prompts';
+import { PR_SUGGESTION_TEMPLATE, buildPatchPrompt, constructPrompt, getReviewPrompt, getTokenLength, getXMLReviewPrompt, isConversationWithinLimit } from './prompts';
 import { BranchDetails, BuilderResponse, Builders, ChatMessage, CodeSuggestion, LLModel, PRFile, PRSuggestion } from './constants';
 import { PullRequestEvent, WebhookEventMap } from '@octokit/webhooks-definitions/schema';
 import { axiom } from './logger';
 import { Octokit } from '@octokit/rest';
 import { getGitFile } from './reviews';
-import { AutoblocksTracer } from '@autoblocks/client';
 import * as crypto from 'crypto';
 import * as xml2js from "xml2js";
 import { INLINE_FN, getInlineFixPrompt } from './prompts/inline-prompt';
@@ -29,41 +28,19 @@ export const logPRInfo = (pullRequest: PullRequestEvent) => {
 }
 
 export const reviewDiff = async (traceTag: string, convo: ChatMessage[], model: LLModel = "gpt-3.5-turbo") => {
-    const tracer = new AutoblocksTracer(process.env.AUTOBLOCKS_INGESTION_KEY, {
-        traceId: crypto.randomUUID(),
-        properties: {
-            provider: 'openai',
-        },
-    });
     const openai = new OpenAI({
         apiKey: process.env.OPENAI_API_KEY,
     });
-
     const requestParams = {  
         messages: convo,
         model: model,
         temperature: 0
     };
-    await tracer.sendEvent(`${traceTag}.request`, {
-        properties: requestParams,
-    });
-    // console.log(convo);
     try {
         //@ts-ignore
         const chatCompletion = await openai.chat.completions.create(requestParams);
-        await tracer.sendEvent(`${traceTag}.response`, {
-            properties: {
-                response: chatCompletion
-            },
-        });
         return chatCompletion.choices[0].message.content;
     } catch (exc) {
-        console.log(exc);
-        await tracer.sendEvent(`${traceTag}.error`, {
-            properties: {
-                exc,
-            },
-        });
         throw new Error("Error getting LLM response")
     }
     

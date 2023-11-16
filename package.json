@@ -5,7 +5,6 @@
     "serve": "tsc && node dist/app.js"
   },
   "dependencies": {
-    "@autoblocks/client": "^0.0.15",
     "@axiomhq/js": "^1.0.0-rc.1",
     "@babel/parser": "^7.23.0",
     "@babel/traverse": "^7.23.2",
