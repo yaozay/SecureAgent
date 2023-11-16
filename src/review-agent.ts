@@ -221,6 +221,14 @@ const generateGithubIssueUrl = (owner: string, repoName: string, title: string, 
     return `[Create Issue](${url})`;
 }
 
+export const dedupSuggestions = (suggestions: PRSuggestion[]): PRSuggestion[] => {
+    const suggestionsMap = new Map<string, PRSuggestion>();
+    suggestions.forEach(suggestion => {
+        suggestionsMap.set(suggestion.identity(), suggestion);
+    });
+    return Array.from(suggestionsMap.values());
+}
+
 const convertPRSuggestionToComment = (owner: string, repo: string, suggestions: PRSuggestion[]): string[] => {
     const suggestionsMap = new Map<string, PRSuggestion[]>();
     suggestions.forEach((suggestion) => {
@@ -246,7 +254,7 @@ const convertPRSuggestionToComment = (owner: string, repo: string, suggestions: 
 const xmlResponseBuilder = async (owner: string, repoName: string, feedbacks: string[]): Promise<BuilderResponse> => {
     console.log("IN XML RESPONSE BUILDER");
     const parsedXMLSuggestions = await processXMLSuggestions(feedbacks);
-    const comments = convertPRSuggestionToComment(owner, repoName, parsedXMLSuggestions);
+    const comments = convertPRSuggestionToComment(owner, repoName, dedupSuggestions(parsedXMLSuggestions));
     const commentBlob = comments.join("\n")
     return { comment: commentBlob, structuredComments: parsedXMLSuggestions }
 }
