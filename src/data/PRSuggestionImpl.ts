@@ -27,4 +27,8 @@ export class PRSuggestionImpl implements PRSuggestion {
         ];
         return xmlElements.join('\n');
     }
+
+    identity(): string {
+        return `${this.filename}:${this.comment}`;
+    }
 }
