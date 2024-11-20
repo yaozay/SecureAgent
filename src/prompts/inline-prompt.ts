@@ -1,4 +1,5 @@
-import { ChatMessage, PRSuggestion } from "../constants"
+import { ChatCompletionMessageParam } from "groq-sdk/resources/chat/completions";
+import { PRSuggestion } from "../constants";
 
 export const INLINE_FIX_PROMPT = `In this task, you are provided with a code suggestion in XML format, along with the corresponding file content. Your task is to radiate from this suggestion and draft a precise code fix. Here's how your input will look:
 
@@ -18,56 +19,60 @@ The 'comment' field contains specific code modification instructions. Based on t
 
 The adjusted code doesn't necessarily need to be standalone valid code, but when incorporated into the corresponding file, it must result in valid, functional code, without errors. Ensure to include only the specific lines affected by the modifications. Avoid including placeholders such as 'rest of code...'
 
-Please interpret the given directions and apply the necessary changes to the provided suggestion and file content. Make the modifications unambiguous and appropriate for utilizing in an inline suggestion on GitHub.`
+Please interpret the given directions and apply the necessary changes to the provided suggestion and file content. Make the modifications unambiguous and appropriate for utilizing in an inline suggestion on GitHub.`;
 
-export const INLINE_FN = [
-    {
-        "name": "fix",
-        "description": "The code fix to address the suggestion and rectify the issue",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "comment": {
-                    "type": "string",
-                    "description": "Why this change improves the code"
-                },
-                "code": {
-                    "type": "string",
-                    "description": "Modified Code Snippet"
-                },
-                "lineStart": {
-                    "type": "number",
-                    "description": "Starting Line Number"
-                },
-                "lineEnd": {
-                    "type": "number",
-                    "description": "Ending Line Number"
-                }
-            }
-        },
-        "required": ["action"]
-    }
-]
+export const INLINE_FIX_FUNCTION = {
+  name: "fix",
+  description: "The code fix to address the suggestion and rectify the issue",
+  parameters: {
+    type: "object",
+    properties: {
+      comment: {
+        type: "string",
+        description: "Why this change improves the code",
+      },
+      code: {
+        type: "string",
+        description: "Modified Code Snippet",
+      },
+      lineStart: {
+        type: "number",
+        description: "Starting Line Number",
+      },
+      lineEnd: {
+        type: "number",
+        description: "Ending Line Number",
+      },
+    },
+  },
+  required: ["action"],
+};
 
 const INLINE_USER_MESSAGE_TEMPLATE = `{SUGGESTION}
 
-{FILE}`
+{FILE}`;
 
 const assignFullLineNumers = (contents: string): string => {
-    const lines = contents.split('\n');
-    let lineNumber = 1;
-    const linesWithNumbers = lines.map(line => {
-        const numberedLine = `${lineNumber}: ${line}`;
-        lineNumber++;
-        return numberedLine;
-    });
-    return linesWithNumbers.join('\n');
-}
+  const lines = contents.split("\n");
+  let lineNumber = 1;
+  const linesWithNumbers = lines.map((line) => {
+    const numberedLine = `${lineNumber}: ${line}`;
+    lineNumber++;
+    return numberedLine;
+  });
+  return linesWithNumbers.join("\n");
+};
 
-export const getInlineFixPrompt = (fileContents: string, suggestion: PRSuggestion): ChatMessage[] => {
-    const userMessage = INLINE_USER_MESSAGE_TEMPLATE.replace("{SUGGESTION}", suggestion.toString()).replace("{FILE}", assignFullLineNumers(fileContents));
-    return [
-        { role: "system", content: INLINE_FIX_PROMPT },
-        { role: "user", content: userMessage}
-    ];
-}
+export const getInlineFixPrompt = (
+  fileContents: string,
+  suggestion: PRSuggestion
+): ChatCompletionMessageParam[] => {
+  const userMessage = INLINE_USER_MESSAGE_TEMPLATE.replace(
+    "{SUGGESTION}",
+    suggestion.toString()
+  ).replace("{FILE}", assignFullLineNumers(fileContents));
+  return [
+    { role: "system", content: INLINE_FIX_PROMPT },
+    { role: "user", content: userMessage },
+  ];
+};
