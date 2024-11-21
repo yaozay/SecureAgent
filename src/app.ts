@@ -47,11 +47,11 @@ async function handlePullRequestOpened({octokit, payload}: {octokit: Octokit, pa
   // const reposWithInlineEnabled = new Set<number>([601904706, 701925328]);
   // const canInlineSuggest = reposWithInlineEnabled.has(payload.repository.id);
   try {
-    logPRInfo(payload);
-    const files = await getChangesPerFile(payload);
-    const review: Review = await processPullRequest(octokit, payload, files, "gpt-4", true);
-    await applyReview({octokit, payload, review})
-    console.log("Review Submitted");
+    // logPRInfo(payload);
+    // const files = await getChangesPerFile(payload);
+    // const review: Review = await processPullRequest(octokit, payload, files, "gpt-4", true);
+    // await applyReview({octokit, payload, review})
+    // console.log("Review Submitted");
   } catch (exc) {
     console.log(exc);
   }
