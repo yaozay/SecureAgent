@@ -51,14 +51,18 @@ npm install
 
 6. Get your Groq API key [here](https://console.groq.com/keys). Through Groq, you'll have free access to the Llama and Gemini models.
 
-7. Create a `.env` file with the following variables:
+7. Create a `.env` file in the root of the project with the following variables:
 
 ```
-GITHUB_PRIVATE_KEY=<your-private-key>
+GITHUB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----
+<your-github-private-key>
+-----END RSA PRIVATE KEY-----"
 GITHUB_APP_ID=<your-app-id>
 GITHUB_WEBHOOK_SECRET=<your-webhook-secret>
 GROQ_API_KEY=<your-groq-api-key>
 ```
+
+Make sure your GITHUB_PRIVATE_KEY is formatted correctly, with the "--- BEGIN RSA PRIVATE KEY ---" and "--- END RSA PRIVATE KEY ---" lines, and is enclosed in quotes.
 
 8. Within the `SecureAgent` directory in your IDE, run the code with the following command:
 
@@ -66,4 +70,7 @@ GROQ_API_KEY=<your-groq-api-key>
 npm run start
 ```
 
-9. Create a pull request on your repository and watch the review agent submit a review!
+9. Create a pull request on one of your repositories and watch the review agent submit a review!
+  - Make sure to create the pull request on a repository that your GitHub app has access to.
+  - Make sure the pull request has at least one changed file that is supported by the review agent. The following file extensions are ignored: ".pdf", ".png", ".jpg", ".jpeg", ".gif", ".mp4", ".mp3", ".md", ".json", ".env", ".toml", and ".svg".
+  - You will have to create new pull requests each time to test the review agent, as it will not work on the same pull request twice.
